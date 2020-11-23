@@ -17,7 +17,7 @@ deleter(){  # function that finds the oldest file and then asks to delete it
                 *) echo  "Please select a valid choice! (y/n)";
                     echo "Press any key to continue..."; read;;
             esac
-            exit 0
+            break
         done
     else
         echo "The directory is empty!"
