@@ -27,7 +27,7 @@ deleter(){  # function that finds the oldest file and then asks to delete it
 if [ $# -eq 0 ]  # checking if a directory was provided or not, then take actions accordingly
 then
     deleter
-	exit 1
+    exit 1
 fi
 if [[ -d $1 ]]
 then
