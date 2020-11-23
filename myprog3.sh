@@ -13,7 +13,7 @@ deleter(){  # function that finds the oldest file and then asks to delete it
             case $yourch in 
                 "y") rm $var; echo "1 file deleted";;
                 "n") echo "No files deleted";;
-                0) exit 1;;
+                0) break;;
                 *) echo  "Please select a valid choice! (y/n)";
                     echo "Press any key to continue..."; read;;
             esac
@@ -27,17 +27,17 @@ deleter(){  # function that finds the oldest file and then asks to delete it
 if [ $# -eq 0 ]  # checking if a directory was provided or not, then take actions accordingly
 then
     deleter
-    exit 1
 fi
 if [[ -d $1 ]]
 then
     cd $1
     deleter
-    exit 1
 elif [ $# -gt 1 ]
 then
     echo "Please provide either no or just 1 directory name!"
+elif [ -z $1 ]
+then
+    echo "Going back to main menu..."
 else
     echo "$1 is no directory!"
-    exit 1
 fi
