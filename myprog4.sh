@@ -26,7 +26,8 @@ then
 				*) echo -n "$c" >> tmp.txt;;
 			esac			
 		done < $1
-		mv tmp.txt $1
+		#replace contents of of the original file with the new one
+		mv tmp.txt $1 
 	else
 	echo "File does not exist!"
 	fi
