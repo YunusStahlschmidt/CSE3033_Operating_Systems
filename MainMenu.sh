@@ -17,24 +17,24 @@ while true
         case $yourch in 
             1) 
             	echo "enter a filename"
-        	read args1;
-        	source ./myprog1.sh $args1;;
+        	    read args1;
+        	    source ./myprog1.sh $args1;;
             2) 
             	echo "enter a String and an Integer"
-        	read args2;
-        	source ./myprog2.sh $args2;;
+        	    read args2;
+        	    source ./myprog2.sh $args2;;
             3) 
-            	echo "enter a filename that you want to delete"
-        	read args3;
-        	source ./3.sh $args3;;
+            	echo "enter a directory name if you want or just press enter to delete the oldest file in the current directory"
+        	    read args3;
+        	    source ./3.sh $args3;;
             4) 
             	echo "enter a filename"
-        	read args4;
-        	source ./myprog4.sh $args4;;
+        	    read args4;
+        	    source ./myprog4.sh $args4;;
             5) 
             	echo "enter a wildcard and optinal -R option"
-        	read args5;
-        	source ./prog5.sh $args5;;
+        	    read args5;
+        	    source ./prog5.sh $args5;;
 
             6) exit 0;;
             *) echo -n "Please select a valid choice! (1-6)"; read;;
