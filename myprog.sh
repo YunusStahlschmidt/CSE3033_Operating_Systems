@@ -26,7 +26,7 @@ while true
             3) 
             	echo "enter a directory name if you want or just press enter to delete the oldest file in the current directory"
         	    read args3;
-        	    source ./3.sh $args3;;
+        	    source ./myprog3.sh $args3;;
             4) 
             	echo "enter a filename"
         	    read args4;
@@ -34,7 +34,7 @@ while true
             5) 
             	echo "enter a wildcard and optinal -R option"
         	    read args5;
-        	    source ./prog5.sh $args5;;
+        	    source ./myprog5.sh $args5;;
 
             6) exit 0;;
             *) echo -n "Please select a valid choice! (1-6)"; read;;
