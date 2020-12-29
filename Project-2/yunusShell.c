@@ -719,18 +719,19 @@ int search(char *string, int R){
 /*************************************** Main ***************************************/
 
 void execute_command(char* args[], int background){
-    int i = 0; // count = 0, j= 0; 
+    int i = 0, k = 0; // count = 0, j= 0; 
     char *ch = "";
     char *tempBuffer[MAX_COMMAND_LEN] = {0};  // ls -l | wc -l < infile >> outfile
     process *p = NULL; // first process
     job *j; 
-    int[3] FLAGS = {0}; //INFILE_FLAG, OUTFILE_FLAG, ERR_FLAG
+    int FLAGS[3] = {0}; //INFILE_FLAG, OUTFILE_FLAG, ERR_FLAG
     while (args[i] != NULL){
         ch = args[i];
         // if not | or << or < or > or >> or 2>
         if (!strcmp(ch, "|")){
-            char *copyOfTemp;
-            copyOfTemp = malloc(strlen(tempBuffer));
+            //char *copyOfTemp;
+            //tempBuffer[j+1] = NULL;
+            char *copyOfTemp = malloc(strlen(tempBuffer));
             strcpy(&copyOfTemp, &tempBuffer);
             process *new_process = create_process(NULL, &copyOfTemp);
             if (p == NULL)
@@ -738,37 +739,57 @@ void execute_command(char* args[], int background){
             else
                 append_process(p, new_process);
             memset(tempBuffer, 0, sizeof(tempBuffer));
+            i++;
+            k = 0;
+            continue;
         }else if (!strcmp(ch, "<<")){
             FLAGS[0] = 1;
 
             memset(tempBuffer, 0, sizeof(tempBuffer));
+            i++;
+            k = 0;
+            continue;
         }else if (!strcmp(ch, "<")){
             FLAGS[0] = 1;
             
             memset(tempBuffer, 0, sizeof(tempBuffer));
+            i++;
+            k = 0;
+            continue;
         }else if (!strcmp(ch, ">>")){
             FLAGS[1] = 1;   
 
             memset(tempBuffer, 0, sizeof(tempBuffer));
+            i++;
+            k = 0;
+            continue;
         }else if (!strcmp(ch, ">")){
             FLAGS[1] = 1;
 
             memset(tempBuffer, 0, sizeof(tempBuffer));
+            i++;
+            k = 0;
+            continue;
         }else if (!strcmp(ch, "2>")){
             FLAGS[2] = 1;
 
             memset(tempBuffer, 0, sizeof(tempBuffer));
+            i++;
+            k = 0;
+            continue;
         }else{
           //bookmark
-            tempBuffer[i] = args[i];
+            tempBuffer[k] = args[i];
         }
         i++;
+        k++;
     }
     if (p == NULL)
         p = create_process(NULL, args);
     else if ((FLAGS[0] == 0)&&(FLAGS[1] == 0)&&(FLAGS[2] == 0)){
-        char *copyOfTemp;
-        copyOfTemp = malloc(strlen(tempBuffer));
+        //char *copyOfTemp = {0};
+        //tempBuffer[j+1] = NULL;
+        char *copyOfTemp = malloc(strlen(tempBuffer));
         strcpy(&copyOfTemp, &tempBuffer);
         process *new_process = create_process(NULL, &copyOfTemp);
         append_process(p, new_process);
@@ -789,7 +810,7 @@ int main(void)
     int last;
 
     while (1){
-        init_shell();
+        //init_shell();
         background = 0;
         count = 0;
         printf("myshell: ");
