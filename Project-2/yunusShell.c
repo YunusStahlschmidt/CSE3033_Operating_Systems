@@ -39,7 +39,7 @@ typedef struct job
   pid_t pgid;                 /* process group ID */
   char notified;              /* true if user told about stopped job */
   struct termios tmodes;      /* saved terminal modes */
-  int stdin, stdout, stderr;  /* standard i/o channels */
+  int in, out, err;  /* standard i/o channels */
 } job;
 
 /* The active jobs are linked into a list.  This is its head.   */
@@ -66,7 +66,7 @@ process* prepend_process(process* head, char **argv)
     return head;
 }
 
-process* append_process(process* head, char **argv)
+process* append_process(process* head, process *p)
 {
     /* go to the last node */
     process *cursor = head;
@@ -74,7 +74,8 @@ process* append_process(process* head, char **argv)
         cursor = cursor->next;
  
     /* create a new node */
-    process* new_node =  create_process(NULL,argv);
+    //process* new_node =  create_process(NULL,argv);
+    process* new_node = p;
     cursor->next = new_node;
  
     return head;
@@ -88,9 +89,9 @@ job* create_job(job* next, process* first_process, int in, int out, int err)
         printf("Error creating a new job.\n");
         exit(0);
     }
-    new_node->stdin = in;
-    new_node->stdout = out;
-    new_node->stderr = err;
+    new_node->in = in;
+    new_node->out = out;
+    new_node->err = err;
     new_node->next = next;
     new_node->first_process = first_process;
     return new_node;
@@ -103,7 +104,7 @@ job* prepend_job(job* head, process* first_process, int in, int out, int err)
     return head;
 }
 
-void append_job(job* head, process* first_process, int in, int out, int err)
+void append_job(job* head, job *j)
 {
     /* go to the last node */
     job *cursor = head;
@@ -111,7 +112,8 @@ void append_job(job* head, process* first_process, int in, int out, int err)
         cursor = cursor->next;
  
     /* create a new node */
-    job* new_node =  create_job(NULL, first_process, in, out, err);
+    //job* new_node =  create_job(NULL, first_process, in, out, err);
+    job* new_node = j;
     cursor->next = new_node;
  
     //return head;
@@ -384,6 +386,43 @@ continue_job (job *j, int foreground)
     put_job_in_background (j, 1);
 }
 
+char* find_given_command(char* args[], int background) {
+    int i = 0;
+	char *ch, ampersand[] = "&";
+	if (background){
+		while ( &ch != NULL){
+			//printf("%d\n", i);
+			ch = args[i];
+			//printf("%s\n", ch);
+			if (!strcmp(ch,ampersand)){
+				//printf("hello we are in!!! -- %s-- \n", ampersand);
+				break;
+			}
+			i++;
+		}
+		args[i] = '\0';
+	}
+	char* path = getenv("PATH");
+	FILE* file;
+	char* token = strtok(path, ":");
+	char* my_command = args[0];
+	char* filename;
+	int is_exists = 0;
+	while (token != NULL) {
+		filename = malloc(strlen(token) + strlen(my_command) + 2);
+		strcpy(filename, token);
+		strcat(filename, "/");
+		strcat(filename, my_command);
+
+		if (file = fopen(filename, "r")) {
+			printf("Your file is here %s\n", filename);
+			is_exists = 1;
+			return filename;
+		}
+		token = strtok(NULL, ":");
+	}
+}
+
 void
 launch_process (process *p, pid_t pgid,
                 int infile, int outfile, int errfile,
@@ -433,9 +472,11 @@ launch_process (process *p, pid_t pgid,
   // path = find_given_command_path(args);
   // printf("the Path is : %s\n", path);
   // execv(path, args);
+  char *path[];
+  path = find_given_command(p->argv);
 
-  execvp (p->argv[0], p->argv);  // tbd replace with execv and call find command
-  perror ("execvp");
+  execv(path, p->argv);  // tbd replace with execv and call find command
+  perror ("execv");
   exit (1);
 }
 
@@ -446,7 +487,7 @@ launch_job (job *j, int foreground)
   pid_t pid;
   int mypipe[2], infile, outfile;
 
-  infile = j->stdin;
+  infile = j->in;
   for (p = j->first_process; p; p = p->next)
     {
       /* Set up pipes, if necessary.  */
@@ -460,14 +501,14 @@ launch_job (job *j, int foreground)
           outfile = mypipe[1];
         }
       else
-        outfile = j->stdout;
+        outfile = j->out;
 
       /* Fork the child processes.  */
       pid = fork ();
       if (pid == 0)
         /* This is the child process.  */
         launch_process (p, j->pgid, infile,
-                        outfile, j->stderr, foreground);
+                        outfile, j->err, foreground);
       else if (pid < 0)
         {
           /* The fork failed.  */
@@ -487,9 +528,9 @@ launch_job (job *j, int foreground)
         }
 
       /* Clean up after pipes.  */
-      if (infile != j->stdin)
+      if (infile != j->in)
         close (infile);
-      if (outfile != j->stdout)
+      if (outfile != j->out)
         close (outfile);
       infile = mypipe[0];
     }
@@ -696,50 +737,50 @@ int search(char *string, int R){
 
 /*************************************** Main ***************************************/
 
-char* find_given_command(char* args[], int background) {
-    int i = 0;
-	char *ch, ampersand[] = "&";
-	if (background){
-		while ( &ch != NULL){
-			//printf("%d\n", i);
-			ch = args[i];
-			//printf("%s\n", ch);
-			if (!strcmp(ch,ampersand)){
-				//printf("hello we are in!!! -- %s-- \n", ampersand);
-				break;
-			}
-			i++;
-		}
-		args[i] = '\0';
-	}
-	char* path = getenv("PATH");
-	FILE* file;
-	char* token = strtok(path, ":");
-	char* my_command = args[0];
-	char* filename;
-	int is_exists = 0;
-	while (token != NULL) {
-		filename = malloc(strlen(token) + strlen(my_command) + 2);
-		strcpy(filename, token);
-		strcat(filename, "/");
-		strcat(filename, my_command);
+// char* find_given_command(char* args[], int background) {
+//     int i = 0;
+// 	char *ch, ampersand[] = "&";
+// 	if (background){
+// 		while ( &ch != NULL){
+// 			//printf("%d\n", i);
+// 			ch = args[i];
+// 			//printf("%s\n", ch);
+// 			if (!strcmp(ch,ampersand)){
+// 				//printf("hello we are in!!! -- %s-- \n", ampersand);
+// 				break;
+// 			}
+// 			i++;
+// 		}
+// 		args[i] = '\0';
+// 	}
+// 	char* path = getenv("PATH");
+// 	FILE* file;
+// 	char* token = strtok(path, ":");
+// 	char* my_command = args[0];
+// 	char* filename;
+// 	int is_exists = 0;
+// 	while (token != NULL) {
+// 		filename = malloc(strlen(token) + strlen(my_command) + 2);
+// 		strcpy(filename, token);
+// 		strcat(filename, "/");
+// 		strcat(filename, my_command);
 
-		if (file = fopen(filename, "r")) {
-			printf("Your file is here %s\n", filename);
-			is_exists = 1;
-			return filename;
-		}
-		token = strtok(NULL, ":");
-	}
-}
+// 		if (file = fopen(filename, "r")) {
+// 			printf("Your file is here %s\n", filename);
+// 			is_exists = 1;
+// 			return filename;
+// 		}
+// 		token = strtok(NULL, ":");
+// 	}
+// }
 
 void execute_command(char* args[], int background){
-    int i = 0; // count = 0, j= 0; 
-    char *ch = "";
-    char *tempBuffer[MAX_COMMAND_LEN];  // ls -l | wc -l < infile >> outfile
+    //int i = 0; // count = 0, j= 0; 
+    //char *ch = "";
+    //char *tempBuffer[MAX_COMMAND_LEN];  // ls -l | wc -l < infile >> outfile
     process *p; //, *tmp;
     job *j; 
-    while (&ch != NULL){
+    /*while (&ch != NULL){
         ch = args[i];
         // if not | or << or < or > or >> or 2>
         if (1){
@@ -753,14 +794,13 @@ void execute_command(char* args[], int background){
               
             // }
 
-            /*
             p = malloc(sizeof(process));
             p->argv = tempBuffer;
             for(tmp = j->first_process; tmp; tmp = tmp->next){
                 if (tmp->next == NULL)
                     tmp->next = p;
             }
-            */
+            
             memset(tempBuffer, 0, sizeof(tempBuffer));
         }else if (!strcmp(ch, "<<")){
 
@@ -782,8 +822,9 @@ void execute_command(char* args[], int background){
             tempBuffer[i] = args[i];
         }
         i++;
-    }
-    append_job(first_job, p, 0, 1, 2);
+    }*/
+    p = create_process(NULL, args);
+    j = create_job(first_job, p, 0, 1, 2);
     launch_job(j, !background);
 }
 
