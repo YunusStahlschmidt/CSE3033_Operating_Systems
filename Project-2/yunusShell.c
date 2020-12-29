@@ -305,6 +305,7 @@ do_job_notification (void)  // ps_all
 
       /* Don’t say anything about jobs that are still running.  */
       else
+        format_job_info(j, "running");
         jlast = j;
     }
 }
@@ -454,10 +455,6 @@ launch_process (process *p, pid_t pgid,
       close (errfile);
     }
 
-  /* Exec the new process.  Make sure we exit.  */
-  // path = find_given_command_path(args);
-  // printf("the Path is : %s\n", path);
-  // execv(path, args);
   char *path;
   path = find_given_command(p->argv, !foreground);
 
@@ -729,13 +726,15 @@ void execute_command(char* args[], int background){
     char *tempBuffer[MAX_COMMAND_LEN] = {0};  // ls -l | wc -l < infile >> outfile
     process *p = NULL; // first process
     job *j; 
+    int INFILE_FLAG, OUTFILE_FLAG, ERR_FLAG;
     while (args[i] != NULL){
         ch = args[i];
         // if not | or << or < or > or >> or 2>
         if (!strcmp(ch, "|")){
             char *copyOfTemp;
-            memcpy(copyOfTemp, &tempBuffer, MAX_COMMAND_LEN);
-            process *new_process = create_process(NULL, copyOfTemp);
+            copyOfTemp = malloc(strlen(tempBuffer));
+            strcpy(&copyOfTemp, &tempBuffer);
+            process *new_process = create_process(NULL, &copyOfTemp);
             if (p == NULL)
                 p = new_process;
             else
@@ -790,6 +789,7 @@ int main(void)
             count++;
         }
         if (!strcmp(args[0], "ps_all")) {
+            do_job_notification();
             printf("calling ps_all\n");
         } 
         else if (!strcmp(args[0], "search")) {
