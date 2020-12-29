@@ -107,8 +107,7 @@ void append_job(job* head, job *j)
 
 
 /* Find the active job with the indicated pgid.  */
-job *
-find_job (pid_t pgid)
+job * find_job (pid_t pgid)
 {
   job *j;
 
@@ -119,8 +118,7 @@ find_job (pid_t pgid)
 }
 
 /* Return true if all processes in the job have stopped or completed.  */
-int
-job_is_stopped (job *j)
+int job_is_stopped (job *j)
 {
   process *p;
 
@@ -726,7 +724,7 @@ void execute_command(char* args[], int background){
     char *tempBuffer[MAX_COMMAND_LEN] = {0};  // ls -l | wc -l < infile >> outfile
     process *p = NULL; // first process
     job *j; 
-    int INFILE_FLAG, OUTFILE_FLAG, ERR_FLAG;
+    int[3] FLAGS = {0}; //INFILE_FLAG, OUTFILE_FLAG, ERR_FLAG
     while (args[i] != NULL){
         ch = args[i];
         // if not | or << or < or > or >> or 2>
@@ -741,19 +739,24 @@ void execute_command(char* args[], int background){
                 append_process(p, new_process);
             memset(tempBuffer, 0, sizeof(tempBuffer));
         }else if (!strcmp(ch, "<<")){
+            FLAGS[0] = 1;
 
             memset(tempBuffer, 0, sizeof(tempBuffer));
         }else if (!strcmp(ch, "<")){
-
+            FLAGS[0] = 1;
+            
             memset(tempBuffer, 0, sizeof(tempBuffer));
         }else if (!strcmp(ch, ">>")){
+            FLAGS[1] = 1;   
 
             memset(tempBuffer, 0, sizeof(tempBuffer));
         }else if (!strcmp(ch, ">")){
+            FLAGS[1] = 1;
 
             memset(tempBuffer, 0, sizeof(tempBuffer));
         }else if (!strcmp(ch, "2>")){
-            
+            FLAGS[2] = 1;
+
             memset(tempBuffer, 0, sizeof(tempBuffer));
         }else{
           //bookmark
@@ -763,6 +766,13 @@ void execute_command(char* args[], int background){
     }
     if (p == NULL)
         p = create_process(NULL, args);
+    else if ((FLAGS[0] == 0)&&(FLAGS[1] == 0)&&(FLAGS[2] == 0)){
+        char *copyOfTemp;
+        copyOfTemp = malloc(strlen(tempBuffer));
+        strcpy(&copyOfTemp, &tempBuffer);
+        process *new_process = create_process(NULL, &copyOfTemp);
+        append_process(p, new_process);
+    }
     j = create_job(first_job, p, 0, 1, 2);
     launch_job(j, !background);
     memset(tempBuffer, 0, sizeof(tempBuffer));
@@ -779,7 +789,7 @@ int main(void)
     int last;
 
     while (1){
-        //init_shell();
+        init_shell();
         background = 0;
         count = 0;
         printf("myshell: ");
