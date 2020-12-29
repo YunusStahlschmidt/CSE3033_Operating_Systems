@@ -59,13 +59,6 @@ process* create_process(process* next, char **argv)
     return new_node;
 }
 
-process* prepend_process(process* head, char **argv)
-{
-    process* new_node = create_process(head,argv);
-    head = new_node;
-    return head;
-}
-
 process* append_process(process* head, process *p)
 {
     /* go to the last node */
@@ -95,13 +88,6 @@ job* create_job(job* next, process* first_process, int in, int out, int err)
     new_node->next = next;
     new_node->first_process = first_process;
     return new_node;
-}
-
-job* prepend_job(job* head, process* first_process, int in, int out, int err)
-{
-    job* new_node = create_job(head, first_process, in, out, err);
-    head = new_node;
-    return head;
 }
 
 void append_job(job* head, job *j)
@@ -472,8 +458,8 @@ launch_process (process *p, pid_t pgid,
   // path = find_given_command_path(args);
   // printf("the Path is : %s\n", path);
   // execv(path, args);
-  char *path[];
-  path = find_given_command(p->argv);
+  char *path;
+  path = find_given_command(p->argv, !foreground);
 
   execv(path, p->argv);  // tbd replace with execv and call find command
   perror ("execv");
@@ -737,70 +723,23 @@ int search(char *string, int R){
 
 /*************************************** Main ***************************************/
 
-// char* find_given_command(char* args[], int background) {
-//     int i = 0;
-// 	char *ch, ampersand[] = "&";
-// 	if (background){
-// 		while ( &ch != NULL){
-// 			//printf("%d\n", i);
-// 			ch = args[i];
-// 			//printf("%s\n", ch);
-// 			if (!strcmp(ch,ampersand)){
-// 				//printf("hello we are in!!! -- %s-- \n", ampersand);
-// 				break;
-// 			}
-// 			i++;
-// 		}
-// 		args[i] = '\0';
-// 	}
-// 	char* path = getenv("PATH");
-// 	FILE* file;
-// 	char* token = strtok(path, ":");
-// 	char* my_command = args[0];
-// 	char* filename;
-// 	int is_exists = 0;
-// 	while (token != NULL) {
-// 		filename = malloc(strlen(token) + strlen(my_command) + 2);
-// 		strcpy(filename, token);
-// 		strcat(filename, "/");
-// 		strcat(filename, my_command);
-
-// 		if (file = fopen(filename, "r")) {
-// 			printf("Your file is here %s\n", filename);
-// 			is_exists = 1;
-// 			return filename;
-// 		}
-// 		token = strtok(NULL, ":");
-// 	}
-// }
-
 void execute_command(char* args[], int background){
-    //int i = 0; // count = 0, j= 0; 
-    //char *ch = "";
-    //char *tempBuffer[MAX_COMMAND_LEN];  // ls -l | wc -l < infile >> outfile
-    process *p; //, *tmp;
+    int i = 0; // count = 0, j= 0; 
+    char *ch = "";
+    char *tempBuffer[MAX_COMMAND_LEN] = {0};  // ls -l | wc -l < infile >> outfile
+    process *p = NULL; // first process
     job *j; 
-    /*while (&ch != NULL){
+    while (args[i] != NULL){
         ch = args[i];
         // if not | or << or < or > or >> or 2>
-        if (1){
-            p = create_process(NULL, args);
-            //create_job(j, stdin, stdout, stderr);
-            //prepend_job(first_job, stdin, stdout, stderr)
-            //prepend_process()
-        }
-        else if (!strcmp(ch, "|")){
-            // for (j= count; j<i;j++){
-              
-            // }
-
-            p = malloc(sizeof(process));
-            p->argv = tempBuffer;
-            for(tmp = j->first_process; tmp; tmp = tmp->next){
-                if (tmp->next == NULL)
-                    tmp->next = p;
-            }
-            
+        if (!strcmp(ch, "|")){
+            char *copyOfTemp;
+            memcpy(copyOfTemp, &tempBuffer, MAX_COMMAND_LEN);
+            process *new_process = create_process(NULL, copyOfTemp);
+            if (p == NULL)
+                p = new_process;
+            else
+                append_process(p, new_process);
             memset(tempBuffer, 0, sizeof(tempBuffer));
         }else if (!strcmp(ch, "<<")){
 
@@ -822,10 +761,12 @@ void execute_command(char* args[], int background){
             tempBuffer[i] = args[i];
         }
         i++;
-    }*/
-    p = create_process(NULL, args);
+    }
+    if (p == NULL)
+        p = create_process(NULL, args);
     j = create_job(first_job, p, 0, 1, 2);
     launch_job(j, !background);
+    memset(tempBuffer, 0, sizeof(tempBuffer));
 }
 
 int main(void)
@@ -886,11 +827,6 @@ int main(void)
         } 
         else {
             execute_command(args, background);
-            // for each process create new process struct 
-            // add these process to job process list
-            // launch job
-            //launch_job();
-
         }
     } // end of while
 }
