@@ -142,6 +142,134 @@ struct termios shell_tmodes;
 int shell_terminal;
 int shell_is_interactive;
 
+
+/* Bookmark Struct and Operations*/
+
+typedef struct bookmark
+{
+  char *args;
+  struct bookmark *next;
+  struct bookmark *prev;
+} bookmark;
+
+bookmark *first_bookmark = NULL;
+
+bookmark *executeBookmark(int pos)
+{
+  bookmark *cursor = first_bookmark;
+  int index = 0;
+  while (cursor != NULL)
+  {
+    if (index == pos)
+      break;
+    cursor = cursor->next;
+    index++;
+  }
+  return cursor;
+}
+void printBookmark()
+{
+  bookmark *cursor = first_bookmark;
+  int index = 0, i;
+  while (cursor != NULL)
+  {
+    printf(" [%d] ", index);
+    printf(" %s ", cursor->args);
+    printf("\n");
+    index++;
+    cursor = cursor->next;
+  }
+}
+void deleteBookmark(int position)
+{
+  bookmark *cursor = first_bookmark;
+  int i = 0;
+  if (cursor == NULL)
+  {
+    fprintf(stderr, "BOokmark yok aq !!");
+    return;
+  }
+  while (i < position)
+  {
+    cursor = cursor->next;
+    i++;
+    if (cursor == NULL)
+      break;
+  }
+  if (cursor == NULL)
+  {
+    fprintf(stderr, "Sorry, out of range\n");
+    return;
+  }
+  if (cursor == first_bookmark)
+  {
+    fprintf(stderr, "deleting zero\n");
+    if (cursor->next == NULL)
+    {
+      first_bookmark = NULL;
+    }
+    else
+    {
+      cursor = first_bookmark->next;
+      cursor->prev = NULL;
+      free(first_bookmark);
+      first_bookmark = cursor;
+    }
+    return;
+  }
+  if (cursor->next == NULL)
+  {
+    cursor->prev->next = NULL;
+    free(cursor);
+    return;
+  }
+
+  if (i < position)
+  {
+    fprintf(stderr, "there is no such index\n");
+    return;
+  }
+  cursor->prev->next = cursor->next;
+  cursor->next->prev = cursor->prev;
+  free(cursor);
+  printf("deletion succesfull\n");
+}
+void addBookmark(char *args[])
+{
+  bookmark *new_bookmark = (bookmark *)malloc(sizeof(bookmark));
+  if (new_bookmark == NULL)
+  {
+    fprintf(stderr, "Error creating bookmark!\n");
+    exit(0);
+  }
+  new_bookmark->args = malloc(sizeof(char) * 100);
+  int i = 1;
+  char *res = malloc(sizeof(char) * 100);
+  while (args[i] != NULL)
+  {
+    fprintf(stderr, "in while\n");
+    char *tmp = malloc(sizeof(char) * sizeof(args[i]));
+    memcpy(tmp, args[i], sizeof(args[i]) + 1);
+    strcat(res, tmp);
+    strcat(res, " ");
+    i++;
+  }
+  new_bookmark->args = res;
+  new_bookmark->next = NULL;
+  new_bookmark->prev = NULL;
+  if (first_bookmark == NULL)
+  {
+    first_bookmark = new_bookmark;
+    return;
+    fprintf(stderr, "bookmark is null\n");
+  }
+  bookmark *cursor = first_bookmark;
+  while (cursor->next != NULL)
+    cursor = cursor->next;
+  cursor->next = new_bookmark;
+  new_bookmark->prev = cursor;
+}
+
 /*************************************** Shell ***************************************/
 
 /* Make sure the shell is running interactively as the foreground job
@@ -867,7 +995,31 @@ int main(void){
             }
         }
         else if (!strcmp(args[0], "bookmark")){
-            printf("calling bookmark\n");
+          if (count >= 2)
+          {
+            int last_ch = strlen(args[count - 1]);
+            printf("size of args %s %d %c\n", args[count - 1], last_ch, args[count - 1][last_ch]);
+            if (!strcmp(args[1], "-l"))
+            {
+              printBookmark();
+            }
+            else if (!strcmp(args[1], "-d"))
+            {
+              deleteBookmark(atoi(args[2]));
+            }
+            else if (args[1][0] == '"' && args[count - 1][last_ch - 1] == '"')
+            {
+              args[count - 1][last_ch - 1] = '\0';
+              args[1]++;
+              printf("adding to bookmark \n");
+              addBookmark(args);
+            }
+            else if (!strcmp(args[1], "-i"))
+            {
+              // should run the command
+              system(executeBookmark(atoi(args[2]))->args);
+            }
+          }
         }
         else if (!strcmp(args[0], "^z")){
             printf("calling ^z\n");
