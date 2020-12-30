@@ -424,7 +424,7 @@ void do_job_notification (void){
 
       /* Don’t say anything about jobs that are still running.  */
       else
-        format_job_info(j, "running");
+        //format_job_info(j, "running");
         jlast = j;
     }
 }
@@ -570,11 +570,6 @@ void launch_process (process *p, pid_t pgid, int infile, int outfile, int errfil
 
   char *path;
   path = find_given_command(p->argv, !foreground);
-
-  // int c;
-  // for (c=0; c<5; c++)
-  //   printf("\nArg%d: %s", c, (p->argv[c]));
-
   execv(path, p->argv);
   perror ("execv");
   exit (1);
@@ -616,15 +611,15 @@ void launch_job (job *j, int foreground){
       else
         {
           /* This is the parent process.  */
-          // p->pid = pid;
-          // if (shell_is_interactive)
-          //   {
-          //     if (!j->pgid)
-          //       j->pgid = pid;
-          //     setpgid (pid, j->pgid);
-          //   }
-          pid_t pid = getpid();
-          j->pgid = pid;
+          p->pid = pid;
+          if (shell_is_interactive)
+            {
+              if (!j->pgid)
+                j->pgid = pid;
+              setpgid (pid, j->pgid);
+            }
+          // pid_t pid = getpid();
+          // j->pgid = pid;
           //setpgid(pid, j->pgid)
         }
 
@@ -842,6 +837,7 @@ void new_exec_command(char* args[], int background){
     char *ch = "";
     char *tempBuffer[MAX_COMMAND_LEN] = {0};  // ls -l | wc -l < infile >> outfile
     process *p = NULL; // first process
+    pid_t pid;
     job *j;
     int in = stdin, out = stdout, err = stderr;
     char* files[3] = {0}; // INFILE, OUTFILE, ERRFILE
@@ -878,11 +874,34 @@ void new_exec_command(char* args[], int background){
         i++;
     }
     if ((FLAGS[0] == 0)&&(FLAGS[1] == 0)&&(FLAGS[2] == 0)&&(FLAGS[3] == 0)&&(FLAGS[4] == 0)){
-        p = create_process(NULL, args);
-        j = create_job(first_job, p, 0, 1, 2);
-        append_job(first_job, j);
-        //first_job = j;
-        launch_job(j, !background);
+      pid = fork ();
+      if (pid == 0){
+        char *path;
+        path = find_given_command(p->argv, background);
+        //if (background)
+          //add to list
+        execv(path, p->argv);
+        perror ("execv");
+      }
+      else if (pid < 0)
+        {
+          /* The fork failed.  */
+          perror ("fork");
+          exit (1);
+        }
+      else
+        {
+          if(background)
+            waitpid(WAIT_ANY, 0, WNOHANG);
+          else
+            wait(NULL);
+      }
+
+        // p = create_process(NULL, args);
+        // j = create_job(first_job, p, 0, 1, 2);
+        // append_job(first_job, j);
+        // //first_job = j;
+        // launch_job(j, !background);
     }else{
         // set errfile
         int i = 0;
@@ -973,8 +992,6 @@ int main(void){
     char inputBuffer[MAX_LINE] = {0}; /*buffer to hold command entered */
     int background; /* equals 1 if a command is followed by '&' */
     char *args[MAX_LINE/2 + 1]; /*command line arguments */
-    //char *path;
-    //pid_t childpid;
     int count; // count of items in args
     int last;
 
