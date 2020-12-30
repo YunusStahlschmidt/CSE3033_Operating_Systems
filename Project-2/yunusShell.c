@@ -9,12 +9,13 @@
 #include <sys/types.h>
 #include <termios.h>
 #include <limits.h>
-#include <dirent.h> 
+#include <dirent.h>
 #include <fcntl.h>
 
 #define MAX_LINE 80 /* 80 chars per line, per command, should be enough. */
 #define MAX_COMMAND_LEN 25  // sets the max possible length of one single command like ls -l
-#define CREATE_FLAGS (O_WRONLY | O_CREAT | O_APPEND)
+#define CREATE_APPEND_FLAGS (O_WRONLY | O_CREAT | O_APPEND)
+#define CREATE_TRUNC_FLAGS (O_WRONLY | O_CREAT | O_TRUNC)
 #define CREATE_MODE (S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
 
 /************************************ Datastructures ************************************/
@@ -55,7 +56,7 @@ process* create_process(process* next, char **argv)
     }
     new_node->argv = argv;
     new_node->next = next;
- 
+
     return new_node;
 }
 
@@ -65,17 +66,16 @@ process* append_process(process* head, process *p)
     process *cursor = head;
     while(cursor->next != NULL)
         cursor = cursor->next;
- 
+
     /* create a new node */
     //process* new_node =  create_process(NULL,argv);
     process* new_node = p;
     cursor->next = new_node;
- 
+
     return head;
 }
 
-job* create_job(job* next, process* first_process, int in, int out, int err)
-{
+job* create_job(job* next, process* first_process, int in, int out, int err){
     job* new_node = (job*)malloc(sizeof(job));
     if(new_node == NULL)
     {
@@ -90,25 +90,23 @@ job* create_job(job* next, process* first_process, int in, int out, int err)
     return new_node;
 }
 
-void append_job(job* head, job *j)
-{
+void append_job(job* head, job *j){
     /* go to the last node */
     job *cursor = head;
     while(cursor->next != NULL)
         cursor = cursor->next;
- 
+
     /* create a new node */
     //job* new_node =  create_job(NULL, first_process, in, out, err);
     job* new_node = j;
     cursor->next = new_node;
- 
+
     //return head;
 }
 
 
 /* Find the active job with the indicated pgid.  */
-job * find_job (pid_t pgid)
-{
+job * find_job (pid_t pgid){
   job *j;
 
   for (j = first_job; j; j = j->next)
@@ -118,8 +116,7 @@ job * find_job (pid_t pgid)
 }
 
 /* Return true if all processes in the job have stopped or completed.  */
-int job_is_stopped (job *j)
-{
+int job_is_stopped (job *j){
   process *p;
 
   for (p = j->first_process; p; p = p->next)
@@ -129,9 +126,7 @@ int job_is_stopped (job *j)
 }
 
 /* Return true if all processes in the job have completed.  */
-int
-job_is_completed (job *j)
-{
+int job_is_completed (job *j){
   process *p;
 
   for (p = j->first_process; p; p = p->next)
@@ -152,9 +147,7 @@ int shell_is_interactive;
 /* Make sure the shell is running interactively as the foreground job
    before proceeding. */
 
-void
-init_shell ()
-{
+void init_shell (){
 
   /* See if we are running interactively.  */
   shell_terminal = STDIN_FILENO;
@@ -190,9 +183,7 @@ init_shell ()
     }
 }
 
-int
-mark_process_status (pid_t pid, int status)
-{
+int mark_process_status (pid_t pid, int status){
   job *j;
   process *p;
 
@@ -231,9 +222,7 @@ mark_process_status (pid_t pid, int status)
 /* Check for processes that have status information available,
    without blocking.  */
 
-void
-update_status (void)
-{
+void update_status (void){
   int status;
   pid_t pid;
 
@@ -245,9 +234,7 @@ update_status (void)
 /* Check for processes that have status information available,
    blocking until all processes in the given job have reported.  */
 
-void
-wait_for_job (job *j)
-{
+void wait_for_job (job *j){
   int status;
   pid_t pid;
 
@@ -260,18 +247,14 @@ wait_for_job (job *j)
 
 /* Format information about job status for the user to look at.  */
 
-void
-format_job_info (job *j, const char *status)
-{
+void format_job_info (job *j, const char *status){
   fprintf (stderr, "%ld (%s): %s\n", (long)j->pgid, status, j->command);
 }
 
 /* Notify the user about stopped or terminated jobs.
    Delete terminated jobs from the active job list.  */
 
-void
-do_job_notification (void)  // ps_all
-{
+void do_job_notification (void){
   job *j, *jlast, *jnext;
 
   /* Update status information for child processes.  */
@@ -312,9 +295,7 @@ do_job_notification (void)  // ps_all
    restore the saved terminal modes and send the process group a
    SIGCONT signal to wake it up before we block.  */
 
-void
-put_job_in_foreground (job *j, int cont)
-{
+void put_job_in_foreground (job *j, int cont){
   /* Put the job into the foreground.  */
   tcsetpgrp (shell_terminal, j->pgid);
 
@@ -408,11 +389,7 @@ char* find_given_command(char* args[], int background) {
 	}
 }
 
-void
-launch_process (process *p, pid_t pgid,
-                int infile, int outfile, int errfile,
-                int foreground)
-{
+void launch_process (process *p, pid_t pgid, int infile, int outfile, int errfile, int foreground){
   pid_t pid;
 
   if (shell_is_interactive)
@@ -456,14 +433,16 @@ launch_process (process *p, pid_t pgid,
   char *path;
   path = find_given_command(p->argv, !foreground);
 
-  execv(path, p->argv);  // tbd replace with execv and call find command
+  int c;
+  for (c=0; c<5; c++)
+    printf("\nArg%d: %s", c, (p->argv[c]));
+
+  execv(path, p->argv);
   perror ("execv");
   exit (1);
 }
 
-void
-launch_job (job *j, int foreground)
-{
+void launch_job (job *j, int foreground){
   process *p;
   pid_t pid;
   int mypipe[2], infile, outfile;
@@ -535,11 +514,11 @@ void setup(char inputBuffer[], char *args[],int *background){
         i,      /* loop index for accessing inputBuffer array */
         start,  /* index where beginning of next command parameter is */
         ct;     /* index of where to place the next parameter into args[] */
-    
+
     ct = 0;
-        
+
     /* read what the user enters on the command line */
-    length = read(STDIN_FILENO,inputBuffer,MAX_LINE);  
+    length = read(STDIN_FILENO,inputBuffer,MAX_LINE);
 
     start = -1;
     if (length == 0)
@@ -566,7 +545,7 @@ void setup(char inputBuffer[], char *args[],int *background){
 
             case '\n':                 /* should be the final char examined */
                 if (start != -1){
-                    args[ct] = &inputBuffer[start];     
+                    args[ct] = &inputBuffer[start];
                     ct++;
                 }
                 inputBuffer[i] = '\0';
@@ -590,12 +569,11 @@ void setup(char inputBuffer[], char *args[],int *background){
 
 /*************************************** Search ***************************************/
 
-void searchSubDir(const char *name, int indent, char *str)
-{
+void searchSubDir(const char *name, int indent, char *str){
     DIR *dir;
     struct dirent *entry;
     char* filename;
-    FILE* fp;                   
+    FILE* fp;
     int flag = 0;
 	int line_num;
 	int find_result = 0;
@@ -615,9 +593,9 @@ void searchSubDir(const char *name, int indent, char *str)
             searchSubDir(path, indent + 2, str);
         } else { //if it is a file
             // printf("%*s- %s\n", indent, "", entry->d_name);
-            if ((entry->d_name[strlen(entry->d_name) - 1] == 'h') ||  
+            if ((entry->d_name[strlen(entry->d_name) - 1] == 'h') ||
                 (entry->d_name[strlen(entry->d_name) - 1] == 'c') ||
-                (entry->d_name[strlen(entry->d_name) - 1] == 'H') || 
+                (entry->d_name[strlen(entry->d_name) - 1] == 'H') ||
                 (entry->d_name[strlen(entry->d_name) - 1] == 'C')) {
                 filename = entry->d_name;
                 // printf("%s\n", filename);
@@ -655,29 +633,29 @@ void searchSubDir(const char *name, int indent, char *str)
     }
 }
 
-int search(char *string, int R){ 
+int search(char *string, int R){
     // printf("in search function\n");
-    // TODO extensive commenting 
-    // TODO error checking 
+    // TODO extensive commenting
+    // TODO error checking
     char* filename;
     DIR *d, *sd;
     struct dirent *dir;
-    FILE* fp;                   
+    FILE* fp;
     int flag = 0;
-	int line_num;
-	int find_result = 0;
-	char temp[512];
+    int line_num;
+    int find_result = 0;
+    char temp[512];
     d = opendir(".");
     char cwd[PATH_MAX];
-    
+
     if (R == 0) { // run with option -r
         searchSubDir(".", 0, string);
     } else { // run without option -r
         if (d) {
             while ((dir = readdir(d)) != NULL) {
-                if ((dir->d_name[strlen(dir->d_name) - 1] == 'h') ||  
+                if ((dir->d_name[strlen(dir->d_name) - 1] == 'h') ||
                     (dir->d_name[strlen(dir->d_name) - 1] == 'c') ||
-                    (dir->d_name[strlen(dir->d_name) - 1] == 'H') || 
+                    (dir->d_name[strlen(dir->d_name) - 1] == 'H') ||
                     (dir->d_name[strlen(dir->d_name) - 1] == 'C')) {
                     filename = dir->d_name;
                     // printf("%s\n", filename);
@@ -719,11 +697,11 @@ int search(char *string, int R){
 /*************************************** Main ***************************************/
 
 void execute_command(char* args[], int background){
-    int i = 0, k = 0; // count = 0, j= 0; 
+    int i = 0, k = 0; // count = 0, j= 0;
     char *ch = "";
     char *tempBuffer[MAX_COMMAND_LEN] = {0};  // ls -l | wc -l < infile >> outfile
     process *p = NULL; // first process
-    job *j; 
+    job *j;
     int FLAGS[3] = {0}; //INFILE_FLAG, OUTFILE_FLAG, ERR_FLAG
     while (args[i] != NULL){
         ch = args[i];
@@ -751,13 +729,13 @@ void execute_command(char* args[], int background){
             continue;
         }else if (!strcmp(ch, "<")){
             FLAGS[0] = 1;
-            
+
             memset(tempBuffer, 0, sizeof(tempBuffer));
             i++;
             k = 0;
             continue;
         }else if (!strcmp(ch, ">>")){
-            FLAGS[1] = 1;   
+            FLAGS[1] = 1;
 
             memset(tempBuffer, 0, sizeof(tempBuffer));
             i++;
@@ -778,7 +756,6 @@ void execute_command(char* args[], int background){
             k = 0;
             continue;
         }else{
-          //bookmark
             tempBuffer[k] = args[i];
         }
         i++;
@@ -787,8 +764,6 @@ void execute_command(char* args[], int background){
     if (p == NULL)
         p = create_process(NULL, args);
     else if ((FLAGS[0] == 0)&&(FLAGS[1] == 0)&&(FLAGS[2] == 0)){
-        //char *copyOfTemp = {0};
-        //tempBuffer[j+1] = NULL;
         char *copyOfTemp = malloc(strlen(tempBuffer));
         strcpy(&copyOfTemp, &tempBuffer);
         process *new_process = create_process(NULL, &copyOfTemp);
@@ -799,33 +774,85 @@ void execute_command(char* args[], int background){
     memset(tempBuffer, 0, sizeof(tempBuffer));
 }
 
-int main(void)
-{
-    char inputBuffer[MAX_LINE]; /*buffer to hold command entered */
+void new_exec_command(char* args[], int background){
+    int i = 0;
+    char *ch = "";
+    char *tempBuffer[MAX_COMMAND_LEN] = {0};  // ls -l | wc -l < infile >> outfile
+    process *p = NULL; // first process
+    job *j;
+    char files[3] = {0}; // INFILE, OUTFILE, ERRFILE
+    int FLAGS[5] = {0}; //PIPE_FLAG, TRUNC_FLAG, APPEND_FLAG, IN_FLAG, ERR_FLAG
+    while (args[i] != NULL){
+        ch = args[i];
+        if (!strcmp(ch, "|")){
+            FLAGS[0] = 1;  // set pipe flag
+            tempBuffer[i] = args[i];
+            continue;
+        }else if (!strcmp(ch, ">")){
+            FLAGS[1] = 1;  // set trunc flag
+            i++;
+            files[1] = args[i];
+            continue;
+        }else if (!strcmp(ch, ">>")){
+            FLAGS[2] = 1;  // set append flag
+            i++;
+            files[1] = args[i];
+            continue;
+        }else if (!strcmp(ch, "<")){
+            FLAGS[3] = 1;  // set in flag
+            i++;
+            files[0] = args[i];
+            continue;
+        }else if (!strcmp(ch, "2>")){
+            FLAGS[4] = 1;  // set err flag
+            i++;
+            files[3] = args[i];
+            continue;
+        }else{
+            tempBuffer[i] = args[i];
+        }
+        i++;
+    }
+    if ((FLAGS[0] == 0)&&(FLAGS[1] == 0)&&(FLAGS[2] == 0)&&(FLAGS[3] == 0)&&(FLAGS[4] == 0)){
+        p = create_process(NULL, args);
+        j = create_job(first_job, p, 0, 1, 2);
+        append_job(first_job, j);
+        launch_job(j, !background);
+    }else{
+
+    }
+    memset(tempBuffer, 0, sizeof(tempBuffer));
+}
+
+int main(void){
+    char inputBuffer[MAX_LINE] = {0}; /*buffer to hold command entered */
     int background; /* equals 1 if a command is followed by '&' */
     char *args[MAX_LINE/2 + 1]; /*command line arguments */
     //char *path;
     //pid_t childpid;
-    int count; // count of items in args 
+    int count; // count of items in args
     int last;
 
     while (1){
-        //init_shell();
+        init_shell();
+        do_job_notification();
         background = 0;
         count = 0;
         printf("myshell: ");
         /*setup() calls exit() when Control-D is entered */
         setup(inputBuffer, args, &background);
-        while(args[count] != NULL){ // counting items in args 
+        if (inputBuffer[0] == NULL)
+          continue;
+        while(args[count] != NULL){ // counting items in args
             count++;
         }
         if (!strcmp(args[0], "ps_all")) {
             do_job_notification();
             printf("calling ps_all\n");
-        } 
+        }
         else if (!strcmp(args[0], "search")) {
             last = strlen(args[1]) - 1;
-            /* removing quotation marks from input string*/ 
+            /* removing quotation marks from input string*/
             memmove(&args[1][last], &args[1][last + 1], strlen(args[1]) - last);
             memmove(&args[1][0], &args[1][0 + 1], strlen(args[1]) - 0);
 
@@ -838,24 +865,24 @@ int main(void)
                 printf("calling search \n");
                 search(args[1], 1);
             }
-        } 
+        }
         else if (!strcmp(args[0], "bookmark")){
             printf("calling bookmark\n");
-        } 
+        }
         else if (!strcmp(args[0], "^z")){
             printf("calling ^z\n");
             // send SIGSTOP signal
-        } 
-        else if (!strcmp(args[0], "exit")){ // calling exit 
+        }
+        else if (!strcmp(args[0], "exit")){ // calling exit
             printf("calling exit\n");
-            // check for background processes 
+            // check for background processes
             // if none then exits
             if (0) {
                 printf(" ");
             } else {
                 exit(1);
             }
-        } 
+        }
         else {
             execute_command(args, background);
         }
