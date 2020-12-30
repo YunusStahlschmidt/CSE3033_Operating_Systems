@@ -703,6 +703,12 @@ void setup(char inputBuffer[], char *args[],int *background){
 
 /*************************************** Search ***************************************/
 
+char *get_filename_ext(const char *filename) {
+    const char *dot = strrchr(filename, '.');
+    if(!dot || dot == filename) return "";
+    return dot + 1;
+}
+
 void searchSubDir(const char *name, int indent, char *str){
     DIR *dir;
     struct dirent *entry;
@@ -712,8 +718,7 @@ void searchSubDir(const char *name, int indent, char *str){
 	int line_num;
 	int find_result = 0;
 	char temp[512];
-    char cwd[PATH_MAX];
-
+  char slash[50] = "";
     if (!(dir = opendir(name)))
         return;
 
@@ -726,20 +731,15 @@ void searchSubDir(const char *name, int indent, char *str){
             // printf("%*s[%s]\n", indent, "", entry->d_name);
             searchSubDir(path, indent + 2, str);
         } else { //if it is a file
-            // printf("%*s- %s\n", indent, "", entry->d_name);
-            if ((entry->d_name[strlen(entry->d_name) - 1] == 'h') ||
-                (entry->d_name[strlen(entry->d_name) - 1] == 'c') ||
-                (entry->d_name[strlen(entry->d_name) - 1] == 'H') ||
-                (entry->d_name[strlen(entry->d_name) - 1] == 'C')) {
+             if (!strcmp(get_filename_ext(entry->d_name),"h") ||
+                    !strcmp(get_filename_ext(entry->d_name),"c") ||
+                    !strcmp(get_filename_ext(entry->d_name), "H") ||
+                    !strcmp(get_filename_ext(entry->d_name),"C")) {
                 filename = entry->d_name;
-                // printf("%s\n", filename);
-                getcwd(cwd, sizeof(cwd));
-                // printf("cwd : s%s\n", cwd);
-                // printf("filename : s%s\n", filename);
-                strcat(cwd, "/");
-                strcat(cwd, filename);
-                // printf("searchin in %s\n", filename);
-                fp = fopen(filename, "r");
+                strcpy(slash, name);
+                strcat(slash, "/");
+                strcat(slash, filename);
+                fp = fopen(slash, "r");
 
                 if (fp == NULL) {
                     printf("Error Occured.\n");
@@ -749,7 +749,7 @@ void searchSubDir(const char *name, int indent, char *str){
                 while(fgets(temp, 512, fp) != NULL) {
                     if((strstr(temp, str)) != NULL) {
                         flag = 1;
-                        printf("\t%d: ./%s -> %s", line_num, filename, temp);
+                        printf("\t%d: %s -> %s", line_num, slash, temp);
                         find_result++;
                     }
                     line_num++;
@@ -787,10 +787,10 @@ int search(char *string, int R){
     } else { // run without option -r
         if (d) {
             while ((dir = readdir(d)) != NULL) {
-                if ((dir->d_name[strlen(dir->d_name) - 1] == 'h') ||
-                    (dir->d_name[strlen(dir->d_name) - 1] == 'c') ||
-                    (dir->d_name[strlen(dir->d_name) - 1] == 'H') ||
-                    (dir->d_name[strlen(dir->d_name) - 1] == 'C')) {
+              if (!strcmp(get_filename_ext(dir->d_name),"h") ||
+                    !strcmp(get_filename_ext(dir->d_name),"c") ||
+                    !strcmp(get_filename_ext(dir->d_name), "H") ||
+                    !strcmp(get_filename_ext(dir->d_name),"C")) {
                     filename = dir->d_name;
                     // printf("%s\n", filename);
                     getcwd(cwd, sizeof(cwd));
