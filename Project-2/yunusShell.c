@@ -955,6 +955,17 @@ void new_exec_command(char* args[], int background){
         launch_job(j, !background);
     }else{
         // set errfile
+        int i = 0;
+        char *res = malloc(sizeof(char) * 100);
+        while (tempBuffer[i] != NULL)
+        {
+          printf("in while %s", tempBuffer[i]);
+          char *tmp = malloc(sizeof(char) * sizeof(tempBuffer[i]));
+          memcpy(tmp, tempBuffer[i], sizeof(tempBuffer[i]) + 1);
+          strcat(res, tmp);
+          strcat(res, " ");
+          i++;
+        }
         if (FLAGS[4] == 1){  // truncate
           err = open(files[2], CREATE_TRUNC_FLAGS, CREATE_MODE);
           if (err == -1) {
@@ -1023,7 +1034,7 @@ void new_exec_command(char* args[], int background){
             return;
           }
         }  
-      system("wc");
+      system(res);
     }
     //memset(tempBuffer, 0, sizeof(tempBuffer));
 }
