@@ -1,0 +1,11 @@
+res ls 
+mainSetup
+mainSetup.c
+mainSetupSam.c
+out.file
+out.txt
+smysh
+smysh.c
+yunusShell
+yunusShell.c
+yunusShell.o

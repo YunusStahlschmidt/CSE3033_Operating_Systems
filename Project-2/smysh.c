@@ -31,12 +31,102 @@ void tstp_handler (int sig){
 typedef struct newProcess
 {
   struct newProcess *next;       /* next process in pipeline */
-  //char **argv;                /* for exec */
+  int isBackground;              /* background indicator flag */
   pid_t pid;                  /* process ID */
   char completed;             /* true if process has completed */
   char stopped;               /* true if process has stopped */
   int status;                 /* reported status value */
 } newProcess;
+
+
+
+newProcess * append_new_process(newProcess* head, newProcess *p)
+{
+  printf("appending new processe :\n");
+
+  if (head == NULL){
+      head = p;
+      printf("changing first process : %d\n", head->pid);
+
+      return head;
+  } else {
+    /* go to the last node */
+    newProcess *cursor = head;
+    while(cursor->next != NULL) {
+        cursor = cursor->next;
+    }
+
+    /* create a new node */
+    //process* new_node =  create_process(NULL,argv);
+    // newProcess* new_node = p;
+    cursor->next = p;
+
+    return head;
+  }
+
+}
+
+newProcess* create_new_process(pid_t pid, int isBackground)
+{
+
+    printf("creating new process :\n");
+    printf("creating new process pid: %d\n", pid);
+
+    newProcess* new_node = (newProcess*)malloc(sizeof(newProcess));
+    if(new_node == NULL)
+    {
+        printf("Error creating a new node.\n");
+        exit(0);
+    }
+    new_node->pid = pid;
+    new_node->next = NULL;
+    new_node->isBackground = isBackground;
+
+    return new_node;
+}
+
+int ps_all(newProcess* head){
+    newProcess *cursor = head;
+    printf("before while: pid  %d\n", cursor->pid);
+    while(cursor != NULL){
+      printf("running processes :\n");
+      printf("\tpid is %d\n", cursor->pid);
+      cursor = cursor->next;
+    }
+    return;
+}
+
+
+// job * find_job (pid_t pgid){
+//   job *j;
+
+//   for (j = first_job; j; j = j->next)
+//     if (j->pgid == pgid)
+//       return j;
+//   return NULL;
+// }
+
+// /* Return true if all processes in the job have stopped or completed.  */
+// int job_is_stopped (job *j){
+//   process *p;
+
+//   for (p = j->first_process; p; p = p->next)
+//     if (!p->completed && !p->stopped)
+//       return 0;
+//   return 1;
+// }
+
+// /* Return true if all processes in the job have completed.  */
+// int job_is_completed (job *j){
+//   process *p;
+
+//   for (p = j->first_process; p; p = p->next)
+//     if (!p->completed)
+//       return 0;
+//   return 1;
+// }
+
+/****************************************************** OLD SHIT *********************************************************/
 
 /* A process is a single process.  */
 typedef struct process
@@ -72,6 +162,7 @@ process* create_process(process* next, char **argv)
         printf("Error creating a new node.\n");
         exit(0);
     }
+    
     new_node->argv = argv;
     new_node->next = next;
 
@@ -165,7 +256,14 @@ int shell_terminal;
 int shell_is_interactive;
 
 
-/* Bookmark Struct and Operations*/
+
+/*************************************** Bookmark ***************************************/
+
+#pragma region Bookmark
+
+/*
+***************************************************** Bookmark *****************************
+*/
 
 typedef struct bookmark
 {
@@ -213,7 +311,7 @@ void deleteBookmark(int position)
   int i = 0;
   if (cursor == NULL)
   {
-    fprintf(stderr, "BOokmark yok aq !!");
+    fprintf(stderr, "There is no bookmark!!");
     return;
   }
   while (i < position)
@@ -296,6 +394,8 @@ void addBookmark(char *args[])
   cursor->next = new_bookmark;
   new_bookmark->prev = cursor;
 }
+
+#pragma endregion
 
 /*************************************** Shell ***************************************/
 
@@ -721,12 +821,14 @@ void setup(char inputBuffer[], char *args[],int *background){
 } /* end of setup routine */
 
 /*************************************** Search ***************************************/
+#pragma region search
 
 char *get_filename_ext(const char *filename) {
     const char *dot = strrchr(filename, '.');
     if(!dot || dot == filename) return "";
     return dot + 1;
 }
+
 
 void searchSubDir(const char *name, int indent, char *str){
     DIR *dir;
@@ -847,291 +949,17 @@ int search(char *string, int R){
     } // end of if option -r
 }
 
+#pragma endregion
 /*************************************** Main ***************************************/
 
-void new_exec_command(char* args[], int background){
-    int i = 0, k = 0;
-    char *ch = "";
-    char *tempBuffer[MAX_COMMAND_LEN] = {0};  // ls -l | wc -l < infile >> outfile
-    process *p = NULL; // first process
-    pid_t pid;
-    job *j;
-    int in = stdin, out = stdout, err = stderr;
-    char* files[3] = {0}; // INFILE, OUTFILE, ERRFILE
-    int* FLAGS[5] = {0}; // PIPE_FLAG, TRUNC_FLAG, APPEND_FLAG, IN_FLAG, ERR_FLAG
-    while (args[i] != NULL){
-        ch = args[i];
-        if (!strcmp(ch, "|")){
-            FLAGS[0] = 1;  // set pipe flag
-            tempBuffer[k] = args[i];
-            //i++;
-            k++;
-        }else if (!strcmp(ch, ">")){
-            FLAGS[1] = 1;  // set trunc flag
-            i++;
-            files[1] = args[i];
-        }else if (!strcmp(ch, ">>")){
-            FLAGS[2] = 1;  // set append flag
-            i++;
-            files[1] = args[i];
-  
-            
-        }else if (!strcmp(ch, "<")){
-            FLAGS[3] = 1;  // set in flag
-            i++;
-            files[0] = args[i];
-        }else if (!strcmp(ch, "2>")){
-            FLAGS[4] = 1;  // set err flag
-            i++;
-            files[3] = args[i];
-        }else{
-            tempBuffer[k] = args[i];
-            k++;
-        }
-        i++;
-    }
-
-    pid = fork ();
-      if (pid == 0){
-        
-        //if (background)
-          //add to list
-
-        if ((&FLAGS[0] == NULL)&&(&FLAGS[1] == NULL)&&(&FLAGS[2] == NULL)&&(&FLAGS[3] == NULL)&&(&FLAGS[4] == NULL)){
-          char *path;
-          path = find_given_command(args, background);
-          execv(path, args);
-          perror ("execv");
-        }else{
-        // set errfile
-          int i = 0;
-          char *res = malloc(sizeof(char) * 100);
-          while (tempBuffer[i] != NULL)
-          {
-            //printf("in while %s", tempBuffer[i]);
-            char *tmp = malloc(sizeof(char) * sizeof(tempBuffer[i]));
-            memcpy(tmp, tempBuffer[i], sizeof(tempBuffer[i]) + 1);
-            strcat(res, tmp);
-            strcat(res, " ");
-            i++;
-          }
-          if (FLAGS[4] == 1){  // error
-            err = open(files[2], CREATE_MODE);
-            if (err == -1) {
-              perror("Failed to open stderr");
-              return;
-            }
-            if (dup2(err, STDERR_FILENO) == -1) {
-              perror("Failed to write standard error");
-              return;
-            }
-            if (close(err) == -1) {
-              perror("Failed to close the strerr");
-              return;
-            }
-          }
-
-          // set infile
-          if (FLAGS[3] == 1){
-            in = open(files[0], READ_FLAGS);
-            if (in == -1) {
-              perror("Failed to open infile.txt");
-              return;
-            }
-            if (dup2(in, STDIN_FILENO) == -1) {
-              perror("Failed to read standard input");
-              return;
-            }
-            if (close(in) == -1) {
-              perror("Failed to close the infile");
-              return;
-            }
-          }
-
-          // set outfile
-          if ((FLAGS[1] == 1)||(FLAGS[2] == 1)){
-            if ((FLAGS[1] == 1)&&(FLAGS[2] != 1)){  // truncate
-              out = open(files[1], CREATE_TRUNC_FLAGS, CREATE_MODE);
-              if (out == -1) {
-                perror("Failed to open outfile.txt");
-                return;
-              }
-              if (dup2(out, STDOUT_FILENO) == -1) {
-                perror("Failed to redirect standard output");
-                return;
-              }
-              if (close(out) == -1) {
-                perror("Failed to close the outfile");
-                return;
-              }
-            }else if ((FLAGS[1] != 1)&&(FLAGS[2] == 1)){  // append
-              out = open(files[1], CREATE_APPEND_FLAGS, CREATE_MODE);
-              if (out == -1) {
-                perror("Failed to open outfile.txt");
-                return;
-              }
-              if (dup2(out, STDOUT_FILENO) == -1) {
-                perror("Failed to redirect standard output");
-                return;
-              }
-              if (close(out) == -1) {
-                perror("Failed to close the outfile");
-                return;
-              }
-            }else{
-              perror("Invalid output redirection!");
-              return;
-            }
-          }  
-          printf("res %s\n", res);
-          system(res);
-        }
-
-      }else if (pid < 0){
-          /* The fork failed.  */
-          perror ("fork");
-          exit (1);
-      }else{
-        if(!background)
-          wait(NULL);
-        //   waitpid(WAIT_ANY, 0, WNOHANG);
-        // else
-          //wait(NULL);
-      }
-
-    // if ((FLAGS[0] == 0)&&(FLAGS[1] == 0)&&(FLAGS[2] == 0)&&(FLAGS[3] == 0)&&(FLAGS[4] == 0)){
-    //   pid = fork ();
-    //   if (pid == 0){
-    //     char *path;
-    //     path = find_given_command(args, background);
-    //     //if (background)
-    //       //add to list
-
-        
-
-    //     execv(path, args);
-    //     perror ("execv");
-    //   }
-    //   else if (pid < 0)
-    //     {
-    //       /* The fork failed.  */
-    //       perror ("fork");
-    //       exit (1);
-    //     }
-    //   else
-    //     {
-    //       if(background)
-    //         waitpid(WAIT_ANY, 0, WNOHANG);
-    //       else
-    //         wait(NULL);
-    //   }
-      // p = create_process(NULL, args);
-      // j = create_job(first_job, p, 0, 1, 2);
-      // append_job(first_job, j);
-      // //first_job = j;
-      // launch_job(j, !background);
-    // }else{
-    //     // set errfile
-    //     int i = 0;
-    //     char *res = malloc(sizeof(char) * 100);
-    //     while (tempBuffer[i] != NULL)
-    //     {
-    //       //printf("in while %s", tempBuffer[i]);
-    //       char *tmp = malloc(sizeof(char) * sizeof(tempBuffer[i]));
-    //       memcpy(tmp, tempBuffer[i], sizeof(tempBuffer[i]) + 1);
-    //       strcat(res, tmp);
-    //       strcat(res, " ");
-    //       i++;
-    //     }
-    //     if (FLAGS[4] == 1){  // error
-    //       err = open(files[2], CREATE_MODE);
-    //       if (err == -1) {
-    //         perror("Failed to open stderr");
-    //         return;
-    //       }
-    //       if (dup2(err, STDERR_FILENO) == -1) {
-    //         perror("Failed to write standard error");
-    //         return;
-    //       }
-    //       if (close(err) == -1) {
-    //         perror("Failed to close the strerr");
-    //         return;
-	  //       }
-    //     }
-
-    //     // set infile
-    //     if (FLAGS[3] == 1){
-    //       in = open(files[0], READ_FLAGS);
-    //       if (in == -1) {
-    //         perror("Failed to open infile.txt");
-    //         return;
-    //       }
-    //       if (dup2(in, STDIN_FILENO) == -1) {
-    //         perror("Failed to read standard input");
-    //         return;
-    //       }
-    //       if (close(in) == -1) {
-    //         perror("Failed to close the infile");
-    //         return;
-	  //       }
-    //     }
-
-    //     // set outfile
-    //     if ((FLAGS[1] == 1)||(FLAGS[2] == 1)){
-    //       if ((FLAGS[1] == 1)&&(FLAGS[2] != 1)){  // truncate
-    //         out = open(files[1], CREATE_TRUNC_FLAGS, CREATE_MODE);
-    //         if (out == -1) {
-    //           perror("Failed to open outfile.txt");
-    //           return;
-    //         }
-    //         if (dup2(out, STDOUT_FILENO) == -1) {
-    //           perror("Failed to redirect standard output");
-    //           return;
-    //         }
-    //         if (close(out) == -1) {
-    //           perror("Failed to close the outfile");
-    //           return;
-    //         }
-    //       }else if ((FLAGS[1] != 1)&&(FLAGS[2] == 1)){  // append
-    //         out = open(files[1], CREATE_APPEND_FLAGS, CREATE_MODE);
-    //         if (out == -1) {
-    //           perror("Failed to open outfile.txt");
-    //           return;
-    //         }
-    //         if (dup2(out, STDOUT_FILENO) == -1) {
-    //           perror("Failed to redirect standard output");
-    //           return;
-    //         }
-    //         if (close(out) == -1) {
-    //           perror("Failed to close the outfile");
-    //           return;
-    //         }
-    //       }else{
-    //         perror("Invalid output redirection!");
-    //         return;
-    //       }
-    //     }  
-    //   system(res);
-    // }
-    //memset(tempBuffer, 0, sizeof(tempBuffer));
-    //init_shell();
-}
-
-// void tstp_handler (int sig){
-//   signal (SIGTSTP, SIG_DFL);
-//   /* Do cleanup actions here. */
-//   //…
-//   raise (SIGTSTP);
-// }
-
 int main(void){
-  //init_shell();
     char inputBuffer[MAX_LINE] = {0}; /*buffer to hold command entered */
     int background; /* equals 1 if a command is followed by '&' */
     char *args[MAX_LINE/2 + 1]; /*command line arguments */
     int count; // count of items in args
     int last;
     pid_t myshellPid = getpid();
+    newProcess *first_process = NULL;
 
     while (1){
         //init_shell();
@@ -1146,8 +974,9 @@ int main(void){
             count++;
         }
         if (!strcmp(args[0], "ps_all")) {
-            printf("calling ps_all\n");
-            do_job_notification();
+            //do_job_notification();ps
+            printf("calling ps_all for real\n");
+            ps_all(first_process);
         }
         else if (!strcmp(args[0], "search")) {
             last = strlen(args[1]) - 1;
@@ -1211,7 +1040,6 @@ int main(void){
             }
         }
         else {
-            //new_exec_command(args, background);
             int i = 0, k = 0;
             char *ch = "";
             char *tempBuffer[MAX_COMMAND_LEN] = {0};  // ls -l | wc -l < infile >> outfile
@@ -1254,11 +1082,14 @@ int main(void){
             }
 
             pid = fork ();
-              if (pid == 0){
+              if (pid == 0){  
+                pid_t childpid = getpid();
                 
-                //if (background)
-                  //add to list
-
+                // if (background) {
+                newProcess *new_process = create_new_process(childpid, background);
+                append_new_process(first_process, new_process);
+                // }
+                
                 if ((FLAGS[0] == 0)&&(FLAGS[1] == 0)&&(FLAGS[2] == 0)&&(FLAGS[3] == 0)&&(FLAGS[4] == 0)){
                   char *path;
                   path = find_given_command(args, background);
@@ -1358,7 +1189,6 @@ int main(void){
                 if(!background)
                   wait(NULL);
               }
-            //update_status();
         }
     } // end of while
 }
