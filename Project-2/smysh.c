@@ -19,7 +19,7 @@
 #define READ_FLAGS (O_RDONLY)
 #define CREATE_MODE (S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
 
-int counter =0;
+int counter = 1;
 
 void tstp_handler(int sig)
 {
@@ -83,36 +83,49 @@ void ps_all()
 		cursor = cursor->next;
 	}
 	cursor = process_list;
-	process *tmp = cursor;
+	process *tmp;
 	printf("Finished:\n");
 	while (cursor != NULL)
 	{
 		if (cursor->completed)
 		{
 			printf("\t[%d] %s\n", cursor->no, cursor->args);
-			tmp = cursor->next;
-			remove_bookmark(cursor);
+			if (cursor->next==NULL)
+				tmp = NULL;
+			else 
+				tmp = cursor->next;
+			remove_process(cursor);
 			cursor = tmp;
 			continue;
 		}
 		cursor = cursor->next;
 	}
 	if (process_list == NULL){
-		counter = 0;
+		counter = 1;
 	}
 }
-void remove_bookmark( process *remove){
+void remove_process( process *remove){
 	process *cursor = process_list;
+	printf(" removing %d\n", cursor->pid);
 	if (remove == process_list){
 		process_list = process_list->next;
-		free(process_list);
+		free(remove);
 		return;
 	}
 	while ( cursor->next == remove){
 		cursor = cursor->next;
 	}
+	
+	if (remove->next == NULL){
+		printf("her for romeve last %d \n", remove->pid);
+		cursor->next = NULL;
+		free(remove);
+		return;
+	}
+
+	printf("her for romeve dsadsa %d \n", remove->pid);
 	cursor->next = cursor->next->next; 
-	free(cursor->next);
+	free(remove);
 
 }
 void add_my_process(pid_t pid, int background, char *args)
