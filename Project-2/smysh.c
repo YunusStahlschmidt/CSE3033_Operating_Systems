@@ -53,7 +53,8 @@ char *concatenate_args(char *args[]){
 		char *tmp = malloc(sizeof(char) * sizeof(args[i]));
 		memcpy(tmp, args[i], sizeof(args[i]) + 1);
 		strcat(res, tmp);
-		strcat(res, " ");
+		if (args[i+1] != NULL)
+			strcat(res, " ");
 		i++;
 	}
 	return res;
@@ -256,7 +257,8 @@ void addBookmark(char *args[])
 		char *tmp = malloc(sizeof(char) * sizeof(args[i]));
 		memcpy(tmp, args[i], sizeof(args[i]) + 1);
 		strcat(res, tmp);
-		strcat(res, " ");
+		if (args[i + 1] != NULL)
+			strcat(res, " ");
 		i++;
 	}
 	new_bookmark->args = res;
@@ -731,6 +733,7 @@ int main(void)
 				else
 				{
 					// set errfile
+					/*
 					int i = 0;
 					char *res = malloc(sizeof(char) * 100);
 					while (tempBuffer[i] != NULL)
@@ -741,7 +744,8 @@ int main(void)
 						strcat(res, tmp);
 						strcat(res, " ");
 						i++;
-					}
+					}*/
+					char *res = concatenate_args(tempBuffer);
 					if (FLAGS[4] == 1)
 					{ // error
 						err = open(files[2], CREATE_MODE);
