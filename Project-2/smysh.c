@@ -100,176 +100,10 @@ void add_my_process(pid_t pid, int background)
 	cursor->next = new_process;
 }
 
-// job * find_job (pid_t pgid){
-//   job *j;
-
-//   for (j = first_job; j; j = j->next)
-//     if (j->pgid == pgid)
-//       return j;
-//   return NULL;
-// }
-
-// /* Return true if all processes in the job have stopped or completed.  */
-// int job_is_stopped (job *j){
-//   process *p;
-
-//   for (p = j->first_process; p; p = p->next)
-//     if (!p->completed && !p->stopped)
-//       return 0;
-//   return 1;
-// }
-
-// /* Return true if all processes in the job have completed.  */
-// int job_is_completed (job *j){
-//   process *p;
-
-//   for (p = j->first_process; p; p = p->next)
-//     if (!p->completed)
-//       return 0;
-//   return 1;
-// }
-
-/****************************************************** OLD SHIT *********************************************************/
-
-/* A process is a single process.  */
-typedef struct process
-{
-	struct process *next; /* next process in pipeline */
-	char **argv;		  /* for exec */
-	pid_t pid;			  /* process ID */
-	char completed;		  /* true if process has completed */
-	char stopped;		  /* true if process has stopped */
-	int status;			  /* reported status value */
-} process;
-
-/* A job is a pipeline of processes.  */
-typedef struct job
-{
-	struct job *next;		/* next active job */
-	char *command;			/* command line, used for messages */
-	process *first_process; /* list of processes in this job */
-	pid_t pgid;				/* process group ID */
-	char notified;			/* true if user told about stopped job */
-	struct termios tmodes;	/* saved terminal modes */
-	int in, out, err;		/* standard i/o channels */
-} job;
-
-/* The active jobs are linked into a list.  This is its head.   */
-job *first_job = NULL;
-
-process *create_process(process *next, char **argv)
-{
-	process *new_node = (process *)malloc(sizeof(process));
-	if (new_node == NULL)
-	{
-		printf("Error creating a new node.\n");
-		exit(0);
-	}
-
-	new_node->argv = argv;
-	new_node->next = next;
-
-	return new_node;
-}
-
-process *append_process(process *head, process *p)
-{
-	/* go to the last node */
-	process *cursor = head;
-	while (cursor->next != NULL)
-		cursor = cursor->next;
-
-	/* create a new node */
-	//process* new_node =  create_process(NULL,argv);
-	process *new_node = p;
-	cursor->next = new_node;
-
-	return head;
-}
-
-job *create_job(job *next, process *first_process, int in, int out, int err)
-{
-	job *new_node = (job *)malloc(sizeof(job));
-	if (new_node == NULL)
-	{
-		printf("Error creating a new job.\n");
-		exit(0);
-	}
-	new_node->in = in;
-	new_node->out = out;
-	new_node->err = err;
-	new_node->next = next;
-	new_node->first_process = first_process;
-	return new_node;
-}
-
-void append_job(job *head, job *j)
-{
-	if (head == NULL)
-	{
-		first_job = j;
-		return;
-	}
-	/* go to the last node */
-	job *cursor = head;
-	while (cursor->next != NULL)
-		cursor = cursor->next;
-
-	/* create a new node */
-	//job* new_node =  create_job(NULL, first_process, in, out, err);
-	job *new_node = j;
-	cursor->next = new_node;
-
-	//return head;
-}
-
-/* Find the active job with the indicated pgid.  */
-job *find_job(pid_t pgid)
-{
-	job *j;
-
-	for (j = first_job; j; j = j->next)
-		if (j->pgid == pgid)
-			return j;
-	return NULL;
-}
-
-/* Return true if all processes in the job have stopped or completed.  */
-int job_is_stopped(job *j)
-{
-	process *p;
-
-	for (p = j->first_process; p; p = p->next)
-		if (!p->completed && !p->stopped)
-			return 0;
-	return 1;
-}
-
-/* Return true if all processes in the job have completed.  */
-int job_is_completed(job *j)
-{
-	process *p;
-
-	for (p = j->first_process; p; p = p->next)
-		if (!p->completed)
-			return 0;
-	return 1;
-}
-
-/* Keep track of attributes of the shell.  */
-
-pid_t shell_pgid;
-struct termios shell_tmodes;
-int shell_terminal;
-int shell_is_interactive;
-
 /*************************************** Bookmark ***************************************/
 
 #pragma region Bookmark
 
-/*
-***************************************************** Bookmark *****************************
-*/
 
 typedef struct bookmark
 {
@@ -402,381 +236,6 @@ void addBookmark(char *args[])
 }
 
 #pragma endregion
-
-/*************************************** Shell ***************************************/
-
-/* Make sure the shell is running interactively as the foreground job
-   before proceeding. */
-
-void init_shell()
-{
-
-	/* See if we are running interactively.  */
-	shell_terminal = STDIN_FILENO;
-	shell_is_interactive = isatty(shell_terminal);
-
-	if (shell_is_interactive)
-	{
-		/* Loop until we are in the foreground.  */
-		while (tcgetpgrp(shell_terminal) != (shell_pgid = getpgrp()))
-			kill(-shell_pgid, SIGTTIN);
-
-		/* Ignore interactive and job-control signals.  */
-		signal(SIGINT, SIG_IGN);
-		signal(SIGQUIT, SIG_IGN);
-		signal(SIGTSTP, SIG_IGN);
-		signal(SIGTTIN, SIG_IGN);
-		signal(SIGTTOU, SIG_IGN);
-		signal(SIGCHLD, SIG_IGN);
-
-		/* Put ourselves in our own process group.  */
-		shell_pgid = getpid();
-		if (setpgid(shell_pgid, shell_pgid) < 0)
-		{
-			perror("Couldn't put the shell in its own process group");
-			exit(1);
-		}
-
-		/* Grab control of the terminal.  */
-		tcsetpgrp(shell_terminal, shell_pgid);
-
-		/* Save default terminal attributes for shell.  */
-		tcgetattr(shell_terminal, &shell_tmodes);
-	}
-}
-
-int mark_process_status(pid_t pid, int status)
-{
-	job *j;
-	process *p;
-
-	if (pid > 0)
-	{
-		/* Update the record for the process.  */
-		for (j = first_job; j; j = j->next)
-			for (p = j->first_process; p; p = p->next)
-				if (p->pid == pid)
-				{
-					p->status = status;
-					if (WIFSTOPPED(status))
-						p->stopped = 1;
-					else
-					{
-						p->completed = 1;
-						if (WIFSIGNALED(status))
-							fprintf(stderr, "%d: Terminated by signal %d.\n",
-									(int)pid, WTERMSIG(p->status));
-					}
-					return 0;
-				}
-		fprintf(stderr, "No child process %d.\n", pid);
-		return -1;
-	}
-	else if (pid == 0 || errno == ECHILD)
-		/* No processes ready to report.  */
-		return -1;
-	else
-	{
-		/* Other weird errors.  */
-		perror("waitpid");
-		return -1;
-	}
-}
-
-/* Check for processes that have status information available,
-   without blocking.  */
-
-void update_status(void)
-{
-	int status;
-	pid_t pid;
-
-	do
-		pid = waitpid(WAIT_ANY, &status, WUNTRACED | WNOHANG);
-	while (!mark_process_status(pid, status));
-}
-
-/* Check for processes that have status information available,
-   blocking until all processes in the given job have reported.  */
-
-void wait_for_job(job *j)
-{
-	int status;
-	pid_t pid;
-
-	do
-		pid = waitpid(WAIT_ANY, &status, WUNTRACED);
-	while (!mark_process_status(pid, status) && !job_is_stopped(j) && !job_is_completed(j));
-}
-
-/* Format information about job status for the user to look at.  */
-
-void format_job_info(job *j, const char *status)
-{
-	fprintf(stderr, "%ld (%s): %s\n", (long)j->pgid, status, j->command);
-}
-
-/* Notify the user about stopped or terminated jobs.
-   Delete terminated jobs from the active job list.  */
-
-void do_job_notification(void)
-{
-	job *j, *jlast, *jnext;
-
-	/* Update status information for child processes.  */
-	update_status();
-
-	jlast = NULL;
-	for (j = first_job; j; j = jnext)
-	{
-		jnext = j->next;
-
-		/* If all processes have completed, tell the user the job has
-         completed and delete it from the list of active jobs.  */
-		if (job_is_completed(j))
-		{
-			format_job_info(j, "completed");
-			if (jlast)
-				jlast->next = jnext;
-			else
-				first_job = jnext;
-			//free_job (j);  // tbd delete from list
-		}
-
-		/* Notify the user about stopped jobs,
-         marking them so that we won’t do this more than once.  */
-		else if (job_is_stopped(j) && !j->notified)
-		{
-			format_job_info(j, "stopped");
-			j->notified = 1;
-			jlast = j;
-		}
-
-		/* Don’t say anything about jobs that are still running.  */
-		else
-			//format_job_info(j, "running");
-			jlast = j;
-	}
-}
-
-/* Put job j in the foreground.  If cont is nonzero,
-   restore the saved terminal modes and send the process group a
-   SIGCONT signal to wake it up before we block.  */
-
-void put_job_in_foreground(job *j, int cont)
-{
-	/* Put the job into the foreground.  */
-	tcsetpgrp(shell_terminal, j->pgid);
-
-	/* Send the job a continue signal, if necessary.  */
-	if (cont)
-	{
-		tcsetattr(shell_terminal, TCSADRAIN, &j->tmodes);
-		if (kill(-j->pgid, SIGCONT) < 0)
-			perror("kill (SIGCONT)");
-	}
-
-	/* Wait for it to report.  */
-	wait_for_job(j);
-
-	/* Put the shell back in the foreground.  */
-	tcsetpgrp(shell_terminal, shell_pgid);
-
-	/* Restore the shell’s terminal modes.  */
-	tcgetattr(shell_terminal, &j->tmodes);
-	tcsetattr(shell_terminal, TCSADRAIN, &shell_tmodes);
-}
-
-/* Put a job in the background.  If the cont argument is true, send
-   the process group a SIGCONT signal to wake it up.  */
-
-void put_job_in_background(job *j, int cont)
-{
-	/* Send the job a continue signal, if necessary.  */
-	if (cont)
-		if (kill(-j->pgid, SIGCONT) < 0)
-			perror("kill (SIGCONT)");
-}
-
-void mark_job_as_running(job *j)
-{
-	process *p;
-
-	for (p = j->first_process; p; p = p->next)
-		p->stopped = 0;
-	j->notified = 0;
-}
-
-/* Continue the job J.  */
-
-void continue_job(job *j, int foreground)
-{
-	mark_job_as_running(j);
-	if (foreground)
-		put_job_in_foreground(j, 1);
-	else
-		put_job_in_background(j, 1);
-}
-
-char *find_given_command(char *args[], int background)
-{
-	int i = 0;
-	char *ch, ampersand[] = "&";
-	if (background)
-	{
-		while (&ch != NULL)
-		{
-			//printf("%d\n", i);
-			ch = args[i];
-			//printf("%s\n", ch);
-			if (!strcmp(ch, ampersand))
-			{
-				//printf("hello we are in!!! -- %s-- \n", ampersand);
-				break;
-			}
-			i++;
-		}
-		args[i] = '\0';
-	}
-	char *path = getenv("PATH");
-	FILE *file;
-	char *token = strtok(path, ":");
-	char *my_command = args[0];
-	char *filename;
-	int is_exists = 0;
-	while (token != NULL)
-	{
-		filename = malloc(strlen(token) + strlen(my_command) + 2);
-		strcpy(filename, token);
-		strcat(filename, "/");
-		strcat(filename, my_command);
-
-		if (file = fopen(filename, "r"))
-		{
-			printf("Your file is here %s\n", filename);
-			is_exists = 1;
-			return filename;
-		}
-		token = strtok(NULL, ":");
-	}
-}
-
-void launch_process(process *p, pid_t pgid, int infile, int outfile, int errfile, int foreground)
-{
-	pid_t pid;
-
-	if (shell_is_interactive)
-	{
-		/* Put the process into the process group and give the process group
-         the terminal, if appropriate.
-         This has to be done both by the shell and in the individual
-         child processes because of potential race conditions.  */
-		pid = getpid();
-		if (pgid == 0)
-			pgid = pid;
-		setpgid(pid, pgid);
-		if (foreground)
-			tcsetpgrp(shell_terminal, pgid);
-
-		/* Set the handling for job control signals back to the default.  */
-		signal(SIGINT, SIG_DFL);
-		signal(SIGQUIT, SIG_DFL);
-		signal(SIGTSTP, SIG_DFL);
-		signal(SIGTTIN, SIG_DFL);
-		signal(SIGTTOU, SIG_DFL);
-		signal(SIGCHLD, SIG_DFL);
-	}
-
-	/* Set the standard input/output channels of the new process.  */
-	if (infile != STDIN_FILENO)
-	{
-		dup2(infile, STDIN_FILENO);
-		close(infile);
-	}
-	if (outfile != STDOUT_FILENO)
-	{
-		dup2(outfile, STDOUT_FILENO);
-		close(outfile);
-	}
-	if (errfile != STDERR_FILENO)
-	{
-		dup2(errfile, STDERR_FILENO);
-		close(errfile);
-	}
-
-	char *path;
-	path = find_given_command(p->argv, !foreground);
-	execv(path, p->argv);
-	perror("execv");
-	exit(1);
-}
-
-void launch_job(job *j, int foreground)
-{
-	process *p;
-	pid_t pid;
-	int mypipe[2], infile, outfile;
-
-	infile = j->in;
-	for (p = j->first_process; p; p = p->next)
-	{
-		/* Set up pipes, if necessary.  */
-		if (p->next)
-		{
-			if (pipe(mypipe) < 0)
-			{
-				perror("pipe");
-				exit(1);
-			}
-			outfile = mypipe[1];
-		}
-		else
-			outfile = j->out;
-
-		/* Fork the child processes.  */
-		pid = fork();
-		if (pid == 0)
-			/* This is the child process.  */
-			launch_process(p, j->pgid, infile,
-						   outfile, j->err, foreground);
-		else if (pid < 0)
-		{
-			/* The fork failed.  */
-			perror("fork");
-			exit(1);
-		}
-		else
-		{
-			/* This is the parent process.  */
-			p->pid = pid;
-			if (shell_is_interactive)
-			{
-				if (!j->pgid)
-					j->pgid = pid;
-				setpgid(pid, j->pgid);
-			}
-			// pid_t pid = getpid();
-			// j->pgid = pid;
-			//setpgid(pid, j->pgid)
-		}
-
-		/* Clean up after pipes.  */
-		if (infile != j->in)
-			close(infile);
-		if (outfile != j->out)
-			close(outfile);
-		infile = mypipe[0];
-	}
-
-	format_job_info(j, "launched");
-
-	if (!shell_is_interactive)
-		wait_for_job(j);
-	else if (foreground)
-		put_job_in_foreground(j, 0);
-	else
-		put_job_in_background(j, 0);
-}
 
 /*********************************************************************************************/
 /*************************************** Main & Others ***************************************/
@@ -1003,6 +462,49 @@ int search(char *string, int R)
 #pragma endregion
 /*************************************** Main ***************************************/
 
+char *find_given_command(char *args[], int background)
+{
+	int i = 0;
+	char *ch, ampersand[] = "&";
+	if (background)
+	{
+		while (&ch != NULL)
+		{
+			//printf("%d\n", i);
+			ch = args[i];
+			//printf("%s\n", ch);
+			if (!strcmp(ch, ampersand))
+			{
+				//printf("hello we are in!!! -- %s-- \n", ampersand);
+				break;
+			}
+			i++;
+		}
+		args[i] = '\0';
+	}
+	char *path = getenv("PATH");
+	FILE *file;
+	char *token = strtok(path, ":");
+	char *my_command = args[0];
+	char *filename;
+	int is_exists = 0;
+	while (token != NULL)
+	{
+		filename = malloc(strlen(token) + strlen(my_command) + 2);
+		strcpy(filename, token);
+		strcat(filename, "/");
+		strcat(filename, my_command);
+
+		if (file = fopen(filename, "r"))
+		{
+			printf("Your file is here %s\n", filename);
+			is_exists = 1;
+			return filename;
+		}
+		token = strtok(NULL, ":");
+	}
+}
+
 int main(void)
 {
 	char inputBuffer[MAX_LINE] = {0}; /*buffer to hold command entered */
@@ -1010,7 +512,6 @@ int main(void)
 	char *args[MAX_LINE / 2 + 1];	  /*command line arguments */
 	int count;						  // count of items in args
 	int last;
-	pid_t myshellPid = getpid();
 	while (1)
 	{
 		//init_shell();
@@ -1108,9 +609,7 @@ int main(void)
 			int i = 0, k = 0;
 			char *ch = "";
 			char *tempBuffer[MAX_COMMAND_LEN] = {0}; // ls -l | wc -l < infile >> outfile
-			process *p = NULL;						 // first process
 			pid_t pid;
-			job *j;
 			int in = stdin, out = stdout, err = stderr;
 			char *files[3] = {0}; // INFILE, OUTFILE, ERRFILE
 			int *FLAGS[5] = {0};  // PIPE_FLAG, TRUNC_FLAG, APPEND_FLAG, IN_FLAG, ERR_FLAG
@@ -1162,10 +661,6 @@ int main(void)
 			{
 				pid_t childpid = getpid();
 				
-
-				// if (background) {
-				// }
-
 				if ((FLAGS[0] == 0) && (FLAGS[1] == 0) && (FLAGS[2] == 0) && (FLAGS[3] == 0) && (FLAGS[4] == 0))
 				{
 					char *path;
@@ -1275,7 +770,6 @@ int main(void)
 							return;
 						}
 					}
-					printf("res %s\n", res);
 					system(res);
 					exit(1);
 				}
