@@ -19,7 +19,24 @@
 #define READ_FLAGS (O_RDONLY)
 #define CREATE_MODE (S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
 
+void tstp_handler (int sig){
+  signal (SIGTSTP, SIG_DFL);
+  /* Do cleanup actions here. */
+  //…
+  raise (SIGTSTP);
+}
+
 /************************************ Datastructures ************************************/
+
+typedef struct newProcess
+{
+  struct newProcess *next;       /* next process in pipeline */
+  //char **argv;                /* for exec */
+  pid_t pid;                  /* process ID */
+  char completed;             /* true if process has completed */
+  char stopped;               /* true if process has stopped */
+  int status;                 /* reported status value */
+} newProcess;
 
 /* A process is a single process.  */
 typedef struct process
@@ -833,7 +850,7 @@ int search(char *string, int R){
 /*************************************** Main ***************************************/
 
 void new_exec_command(char* args[], int background){
-    int i = 0;
+    int i = 0, k = 0;
     char *ch = "";
     char *tempBuffer[MAX_COMMAND_LEN] = {0};  // ls -l | wc -l < infile >> outfile
     process *p = NULL; // first process
@@ -841,163 +858,283 @@ void new_exec_command(char* args[], int background){
     job *j;
     int in = stdin, out = stdout, err = stderr;
     char* files[3] = {0}; // INFILE, OUTFILE, ERRFILE
-    int FLAGS[5] = {0}; // PIPE_FLAG, TRUNC_FLAG, APPEND_FLAG, IN_FLAG, ERR_FLAG
+    int* FLAGS[5] = {0}; // PIPE_FLAG, TRUNC_FLAG, APPEND_FLAG, IN_FLAG, ERR_FLAG
     while (args[i] != NULL){
         ch = args[i];
         if (!strcmp(ch, "|")){
             FLAGS[0] = 1;  // set pipe flag
-            tempBuffer[i] = args[i];
-            continue;
+            tempBuffer[k] = args[i];
+            //i++;
+            k++;
         }else if (!strcmp(ch, ">")){
             FLAGS[1] = 1;  // set trunc flag
             i++;
             files[1] = args[i];
-            continue;
         }else if (!strcmp(ch, ">>")){
             FLAGS[2] = 1;  // set append flag
             i++;
             files[1] = args[i];
-            continue;
+  
+            
         }else if (!strcmp(ch, "<")){
             FLAGS[3] = 1;  // set in flag
             i++;
             files[0] = args[i];
-            continue;
         }else if (!strcmp(ch, "2>")){
             FLAGS[4] = 1;  // set err flag
             i++;
             files[3] = args[i];
-            continue;
         }else{
-            tempBuffer[i] = args[i];
+            tempBuffer[k] = args[i];
+            k++;
         }
         i++;
     }
-    if ((FLAGS[0] == 0)&&(FLAGS[1] == 0)&&(FLAGS[2] == 0)&&(FLAGS[3] == 0)&&(FLAGS[4] == 0)){
-      pid = fork ();
+
+    pid = fork ();
       if (pid == 0){
-        char *path;
-        path = find_given_command(p->argv, background);
+        
         //if (background)
           //add to list
-        execv(path, p->argv);
-        perror ("execv");
-      }
-      else if (pid < 0)
-        {
+
+        if ((&FLAGS[0] == NULL)&&(&FLAGS[1] == NULL)&&(&FLAGS[2] == NULL)&&(&FLAGS[3] == NULL)&&(&FLAGS[4] == NULL)){
+          char *path;
+          path = find_given_command(args, background);
+          execv(path, args);
+          perror ("execv");
+        }else{
+        // set errfile
+          int i = 0;
+          char *res = malloc(sizeof(char) * 100);
+          while (tempBuffer[i] != NULL)
+          {
+            //printf("in while %s", tempBuffer[i]);
+            char *tmp = malloc(sizeof(char) * sizeof(tempBuffer[i]));
+            memcpy(tmp, tempBuffer[i], sizeof(tempBuffer[i]) + 1);
+            strcat(res, tmp);
+            strcat(res, " ");
+            i++;
+          }
+          if (FLAGS[4] == 1){  // error
+            err = open(files[2], CREATE_MODE);
+            if (err == -1) {
+              perror("Failed to open stderr");
+              return;
+            }
+            if (dup2(err, STDERR_FILENO) == -1) {
+              perror("Failed to write standard error");
+              return;
+            }
+            if (close(err) == -1) {
+              perror("Failed to close the strerr");
+              return;
+            }
+          }
+
+          // set infile
+          if (FLAGS[3] == 1){
+            in = open(files[0], READ_FLAGS);
+            if (in == -1) {
+              perror("Failed to open infile.txt");
+              return;
+            }
+            if (dup2(in, STDIN_FILENO) == -1) {
+              perror("Failed to read standard input");
+              return;
+            }
+            if (close(in) == -1) {
+              perror("Failed to close the infile");
+              return;
+            }
+          }
+
+          // set outfile
+          if ((FLAGS[1] == 1)||(FLAGS[2] == 1)){
+            if ((FLAGS[1] == 1)&&(FLAGS[2] != 1)){  // truncate
+              out = open(files[1], CREATE_TRUNC_FLAGS, CREATE_MODE);
+              if (out == -1) {
+                perror("Failed to open outfile.txt");
+                return;
+              }
+              if (dup2(out, STDOUT_FILENO) == -1) {
+                perror("Failed to redirect standard output");
+                return;
+              }
+              if (close(out) == -1) {
+                perror("Failed to close the outfile");
+                return;
+              }
+            }else if ((FLAGS[1] != 1)&&(FLAGS[2] == 1)){  // append
+              out = open(files[1], CREATE_APPEND_FLAGS, CREATE_MODE);
+              if (out == -1) {
+                perror("Failed to open outfile.txt");
+                return;
+              }
+              if (dup2(out, STDOUT_FILENO) == -1) {
+                perror("Failed to redirect standard output");
+                return;
+              }
+              if (close(out) == -1) {
+                perror("Failed to close the outfile");
+                return;
+              }
+            }else{
+              perror("Invalid output redirection!");
+              return;
+            }
+          }  
+          printf("res %s\n", res);
+          system(res);
+        }
+
+      }else if (pid < 0){
           /* The fork failed.  */
           perror ("fork");
           exit (1);
-        }
-      else
-        {
-          if(background)
-            waitpid(WAIT_ANY, 0, WNOHANG);
-          else
-            wait(NULL);
+      }else{
+        if(!background)
+          wait(NULL);
+        //   waitpid(WAIT_ANY, 0, WNOHANG);
+        // else
+          //wait(NULL);
       }
 
-        // p = create_process(NULL, args);
-        // j = create_job(first_job, p, 0, 1, 2);
-        // append_job(first_job, j);
-        // //first_job = j;
-        // launch_job(j, !background);
-    }else{
-        // set errfile
-        int i = 0;
-        char *res = malloc(sizeof(char) * 100);
-        while (tempBuffer[i] != NULL)
-        {
-          printf("in while %s", tempBuffer[i]);
-          char *tmp = malloc(sizeof(char) * sizeof(tempBuffer[i]));
-          memcpy(tmp, tempBuffer[i], sizeof(tempBuffer[i]) + 1);
-          strcat(res, tmp);
-          strcat(res, " ");
-          i++;
-        }
-        if (FLAGS[4] == 1){  // truncate
-          err = open(files[2], CREATE_TRUNC_FLAGS, CREATE_MODE);
-          if (err == -1) {
-            perror("Failed to open stderr");
-            return;
-          }
-          if (dup2(err, STDERR_FILENO) == -1) {
-            perror("Failed to write standard error");
-            return;
-          }
-          if (close(err) == -1) {
-            perror("Failed to close the strerr");
-            return;
-	        }
-        }
+    // if ((FLAGS[0] == 0)&&(FLAGS[1] == 0)&&(FLAGS[2] == 0)&&(FLAGS[3] == 0)&&(FLAGS[4] == 0)){
+    //   pid = fork ();
+    //   if (pid == 0){
+    //     char *path;
+    //     path = find_given_command(args, background);
+    //     //if (background)
+    //       //add to list
 
-        // set infile
-        if (FLAGS[3] == 1){  // truncate
-          in = open(files[0], READ_FLAGS);
-          if (in == -1) {
-            perror("Failed to open infile.txt");
-            return;
-          }
-          if (dup2(in, STDIN_FILENO) == -1) {
-            perror("Failed to read standard input");
-            return;
-          }
-          if (close(in) == -1) {
-            perror("Failed to close the infile");
-            return;
-	        }
-        }
+        
 
-        // set outfile
-        if ((FLAGS[1] == 1)||(FLAGS[2] == 1)){
-          if ((FLAGS[1] == 1)&&(FLAGS[2] != 1)){  // truncate
-            out = open(files[1], CREATE_TRUNC_FLAGS, CREATE_MODE);
-            if (out == -1) {
-              perror("Failed to open outfile.txt");
-              return;
-            }
-            if (dup2(out, STDOUT_FILENO) == -1) {
-              perror("Failed to redirect standard output");
-              return;
-            }
-            if (close(out) == -1) {
-              perror("Failed to close the outfile");
-              return;
-            }
-          }else if ((FLAGS[1] != 1)&&(FLAGS[2] == 1)){  // append
-            out = open(files[1], CREATE_APPEND_FLAGS, CREATE_MODE);
-            if (out == -1) {
-              perror("Failed to open outfile.txt");
-              return;
-            }
-            if (dup2(out, STDOUT_FILENO) == -1) {
-              perror("Failed to redirect standard output");
-              return;
-            }
-            if (close(out) == -1) {
-              perror("Failed to close the outfile");
-              return;
-            }
-          }else{
-            perror("Invalid output redirection!");
-            return;
-          }
-        }  
-      system(res);
-    }
+    //     execv(path, args);
+    //     perror ("execv");
+    //   }
+    //   else if (pid < 0)
+    //     {
+    //       /* The fork failed.  */
+    //       perror ("fork");
+    //       exit (1);
+    //     }
+    //   else
+    //     {
+    //       if(background)
+    //         waitpid(WAIT_ANY, 0, WNOHANG);
+    //       else
+    //         wait(NULL);
+    //   }
+      // p = create_process(NULL, args);
+      // j = create_job(first_job, p, 0, 1, 2);
+      // append_job(first_job, j);
+      // //first_job = j;
+      // launch_job(j, !background);
+    // }else{
+    //     // set errfile
+    //     int i = 0;
+    //     char *res = malloc(sizeof(char) * 100);
+    //     while (tempBuffer[i] != NULL)
+    //     {
+    //       //printf("in while %s", tempBuffer[i]);
+    //       char *tmp = malloc(sizeof(char) * sizeof(tempBuffer[i]));
+    //       memcpy(tmp, tempBuffer[i], sizeof(tempBuffer[i]) + 1);
+    //       strcat(res, tmp);
+    //       strcat(res, " ");
+    //       i++;
+    //     }
+    //     if (FLAGS[4] == 1){  // error
+    //       err = open(files[2], CREATE_MODE);
+    //       if (err == -1) {
+    //         perror("Failed to open stderr");
+    //         return;
+    //       }
+    //       if (dup2(err, STDERR_FILENO) == -1) {
+    //         perror("Failed to write standard error");
+    //         return;
+    //       }
+    //       if (close(err) == -1) {
+    //         perror("Failed to close the strerr");
+    //         return;
+	  //       }
+    //     }
+
+    //     // set infile
+    //     if (FLAGS[3] == 1){
+    //       in = open(files[0], READ_FLAGS);
+    //       if (in == -1) {
+    //         perror("Failed to open infile.txt");
+    //         return;
+    //       }
+    //       if (dup2(in, STDIN_FILENO) == -1) {
+    //         perror("Failed to read standard input");
+    //         return;
+    //       }
+    //       if (close(in) == -1) {
+    //         perror("Failed to close the infile");
+    //         return;
+	  //       }
+    //     }
+
+    //     // set outfile
+    //     if ((FLAGS[1] == 1)||(FLAGS[2] == 1)){
+    //       if ((FLAGS[1] == 1)&&(FLAGS[2] != 1)){  // truncate
+    //         out = open(files[1], CREATE_TRUNC_FLAGS, CREATE_MODE);
+    //         if (out == -1) {
+    //           perror("Failed to open outfile.txt");
+    //           return;
+    //         }
+    //         if (dup2(out, STDOUT_FILENO) == -1) {
+    //           perror("Failed to redirect standard output");
+    //           return;
+    //         }
+    //         if (close(out) == -1) {
+    //           perror("Failed to close the outfile");
+    //           return;
+    //         }
+    //       }else if ((FLAGS[1] != 1)&&(FLAGS[2] == 1)){  // append
+    //         out = open(files[1], CREATE_APPEND_FLAGS, CREATE_MODE);
+    //         if (out == -1) {
+    //           perror("Failed to open outfile.txt");
+    //           return;
+    //         }
+    //         if (dup2(out, STDOUT_FILENO) == -1) {
+    //           perror("Failed to redirect standard output");
+    //           return;
+    //         }
+    //         if (close(out) == -1) {
+    //           perror("Failed to close the outfile");
+    //           return;
+    //         }
+    //       }else{
+    //         perror("Invalid output redirection!");
+    //         return;
+    //       }
+    //     }  
+    //   system(res);
+    // }
     //memset(tempBuffer, 0, sizeof(tempBuffer));
+    //init_shell();
 }
 
+// void tstp_handler (int sig){
+//   signal (SIGTSTP, SIG_DFL);
+//   /* Do cleanup actions here. */
+//   //…
+//   raise (SIGTSTP);
+// }
+
 int main(void){
+  //init_shell();
     char inputBuffer[MAX_LINE] = {0}; /*buffer to hold command entered */
     int background; /* equals 1 if a command is followed by '&' */
     char *args[MAX_LINE/2 + 1]; /*command line arguments */
     int count; // count of items in args
     int last;
+    pid_t myshellPid = getpid();
 
     while (1){
         //init_shell();
-        //do_job_notification();
         background = 0;
         count = 0;
         printf("myshell: ");
@@ -1009,8 +1146,8 @@ int main(void){
             count++;
         }
         if (!strcmp(args[0], "ps_all")) {
-            do_job_notification();
             printf("calling ps_all\n");
+            do_job_notification();
         }
         else if (!strcmp(args[0], "search")) {
             last = strlen(args[1]) - 1;
@@ -1058,9 +1195,10 @@ int main(void){
             }
           }
         }
-        else if (!strcmp(args[0], "^z")){
+        else if (!strcmp(args[0], "^Z")){
             printf("calling ^z\n");
             // send SIGSTOP signal
+            tstp_handler(23);
         }
         else if (!strcmp(args[0], "exit")){ // calling exit
             printf("calling exit\n");
@@ -1074,6 +1212,7 @@ int main(void){
         }
         else {
             new_exec_command(args, background);
+            //update_status();
         }
     } // end of while
 }
