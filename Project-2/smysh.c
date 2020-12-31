@@ -19,6 +19,8 @@
 #define READ_FLAGS (O_RDONLY)
 #define CREATE_MODE (S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
 
+int counter =0;
+
 void tstp_handler(int sig)
 {
 	signal(SIGTSTP, SIG_DFL);
@@ -29,21 +31,36 @@ void tstp_handler(int sig)
 
 /************************************ Datastructures ************************************/
 
-typedef struct newProcess
+typedef struct process
 {
-	struct newProcess *next; /* next process in pipeline */
+	struct process *next; /* next process in pipeline */
 	int isBackground;		 /* background indicator flag */
 	pid_t pid;				 /* process ID */
 	char completed;			 /* true if process has completed */
 	char stopped;			 /* true if process has stopped */
 	int status;				 /* reported status value */
-} newProcess;
+	char *args;
+	int no;
+} process;
 
-newProcess *process_list = NULL;
+process *process_list = NULL;
 
+char *concatenate_args(char *args[]){
+	int i = 0;
+	char *res = malloc(sizeof(char) * 100);
+	while (args[i] != NULL)
+	{
+		char *tmp = malloc(sizeof(char) * sizeof(args[i]));
+		memcpy(tmp, args[i], sizeof(args[i]) + 1);
+		strcat(res, tmp);
+		strcat(res, " ");
+		i++;
+	}
+	return res;
+}
 void ps_all()
 {
-	newProcess *cursor = process_list;
+	process *cursor = process_list;
 	while (cursor != NULL)
 	{
 		if (waitpid(cursor->pid, NULL, WNOHANG)== (cursor->pid)){
@@ -60,18 +77,18 @@ void ps_all()
 	{
 		if (!cursor->completed)
 		{
-			printf(" (Pid=%d)\n",cursor->pid);
+			printf("\t[%d] %s (Pid=%d)\n", cursor->no, cursor->args, cursor->pid);
 		}
 		cursor = cursor->next;
 	}
 	cursor = process_list;
-	newProcess *tmp = cursor;
+	process *tmp = cursor;
 	printf("Finished:\n");
 	while (cursor != NULL)
 	{
 		if (cursor->completed)
 		{
-			printf(" (Pid=%d)\n", cursor->pid);
+			printf("\t[%d] %s\n", cursor->no, cursor->args);
 			tmp = cursor->next;
 			remove_bookmark(cursor);
 			cursor = tmp;
@@ -79,9 +96,12 @@ void ps_all()
 		}
 		cursor = cursor->next;
 	}
+	if (process_list == NULL){
+		counter = 0;
+	}
 }
-void remove_bookmark( newProcess *remove){
-	newProcess *cursor = process_list;
+void remove_bookmark( process *remove){
+	process *cursor = process_list;
 	if (remove == process_list){
 		process_list = process_list->next;
 		free(process_list);
@@ -94,23 +114,26 @@ void remove_bookmark( newProcess *remove){
 	free(cursor->next);
 
 }
-void add_my_process(pid_t pid, int background)
+void add_my_process(pid_t pid, int background, char *args)
 {
-	newProcess *new_process = (newProcess *)malloc(sizeof(newProcess));
+	process *new_process = (process *)malloc(sizeof(process));
 	if (new_process == NULL)
 	{
 		fprintf(stderr, "Error creating newProcess!\n");
 		exit(0);
 	}
 	new_process->pid = pid;
+	new_process->no = counter;
+	new_process->args = args;
 	new_process->isBackground = background;
 	new_process->next = NULL;
+	counter++;
 	if (process_list == NULL)
 	{
 		process_list = new_process;
 		return;
 	}
-	newProcess *cursor = process_list;
+	process *cursor = process_list;
 	while (cursor->next != NULL)
 	{
 		cursor = cursor->next;
@@ -156,9 +179,9 @@ void printBookmark()
 	int index = 0, i;
 	while (cursor != NULL)
 	{
-		printf(" [%d] ", index);
-		printf(" %s ", cursor->args);
-		printf("\n");
+		printf("\t%d \"", index);
+		printf("%s", cursor->args);
+		printf("\"\n");
 		index++;
 		cursor = cursor->next;
 	}
@@ -227,10 +250,9 @@ void addBookmark(char *args[])
 	}
 	new_bookmark->args = malloc(sizeof(char) * 100);
 	int i = 1;
-	char *res = malloc(sizeof(char) * 100);
+	char *res = malloc(sizeof(char) * 150);
 	while (args[i] != NULL)
 	{
-		fprintf(stderr, "in while\n");
 		char *tmp = malloc(sizeof(char) * sizeof(args[i]));
 		memcpy(tmp, args[i], sizeof(args[i]) + 1);
 		strcat(res, tmp);
@@ -576,7 +598,6 @@ int main(void)
 			if (count >= 2)
 			{
 				int last_ch = strlen(args[count - 1]);
-				printf("size of args %s %d %c\n", args[count - 1], last_ch, args[count - 1][last_ch]);
 				if (!strcmp(args[1], "-l"))
 				{
 					printBookmark();
@@ -589,7 +610,6 @@ int main(void)
 				{
 					args[count - 1][last_ch - 1] = '\0';
 					args[1]++;
-					printf("adding to bookmark \n");
 					addBookmark(args);
 				}
 				else if (!strcmp(args[1], "-i"))
@@ -610,12 +630,34 @@ int main(void)
 		}
 		else if (!strcmp(args[0], "exit"))
 		{ // calling exit
-			printf("calling exit\n");
-			// check for background processes
-			// if none then exits
-			if (0)
+			process *cursor = process_list;
+			int running = 0;
+			cursor = process_list;
+			while (cursor != NULL)
 			{
-				printf(" ");
+				if (waitpid(cursor->pid, NULL, WNOHANG) == (cursor->pid))
+				{
+					cursor->completed = 1;
+				}
+				else
+				{
+					cursor->completed = 0;
+				}
+				cursor = cursor->next;
+			}
+			cursor=process_list;
+			while (cursor != NULL)
+			{
+				if (!cursor->completed)
+				{
+					//printf(" (Pid=%d)\n",cursor->pid);
+					running = 1;
+				}
+				cursor = cursor->next;
+			}
+			if (running)
+			{
+				printf("There are still running processes!\n");
 			}
 			else
 			{
@@ -804,7 +846,8 @@ int main(void)
 				{
 					wait(NULL);
 				}else{
-					add_my_process(pid, background);
+					char *process_args = concatenate_args(args);
+					add_my_process(pid, background, process_args);
 				}
 			}
 		}
