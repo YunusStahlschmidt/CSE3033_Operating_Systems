@@ -1259,7 +1259,7 @@ int main(void){
                 //if (background)
                   //add to list
 
-                if ((&FLAGS[0] == NULL)&&(&FLAGS[1] == NULL)&&(&FLAGS[2] == NULL)&&(&FLAGS[3] == NULL)&&(&FLAGS[4] == NULL)){
+                if ((FLAGS[0] == 0)&&(FLAGS[1] == 0)&&(FLAGS[2] == 0)&&(FLAGS[3] == 0)&&(FLAGS[4] == 0)){
                   char *path;
                   path = find_given_command(args, background);
                   execv(path, args);
@@ -1347,6 +1347,7 @@ int main(void){
                   }  
                   printf("res %s\n", res);
                   system(res);
+                  exit(1);
                 }
 
               }else if (pid < 0){
@@ -1356,9 +1357,6 @@ int main(void){
               }else{
                 if(!background)
                   wait(NULL);
-                //   waitpid(WAIT_ANY, 0, WNOHANG);
-                // else
-                  //wait(NULL);
               }
             //update_status();
         }
