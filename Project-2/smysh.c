@@ -46,7 +46,7 @@ void ps_all()
 	newProcess *cursor = process_list;
 	while (cursor != NULL)
 	{
-		if (waitpid(cursor->pid, NULL, WNOHANG)!= cursor->pid){
+		if (waitpid(cursor->pid, NULL, WNOHANG)== (cursor->pid)){
 			cursor->completed = 1;
 		}else{
 			cursor->completed = 0;
@@ -58,24 +58,42 @@ void ps_all()
 	cursor = process_list;
 	while (cursor != NULL)
 	{
-		if (cursor->completed)
+		if (!cursor->completed)
 		{
 			printf(" (Pid=%d)\n",cursor->pid);
 		}
 		cursor = cursor->next;
 	}
 	cursor = process_list;
+	newProcess *tmp = cursor;
 	printf("Finished:\n");
 	while (cursor != NULL)
 	{
-		if (!cursor->completed)
+		if (cursor->completed)
 		{
 			printf(" (Pid=%d)\n", cursor->pid);
+			tmp = cursor->next;
+			remove_bookmark(cursor);
+			cursor = tmp;
+			continue;
 		}
 		cursor = cursor->next;
 	}
 }
+void remove_bookmark( newProcess *remove){
+	newProcess *cursor = process_list;
+	if (remove == process_list){
+		process_list = process_list->next;
+		free(process_list);
+		return;
+	}
+	while ( cursor->next == remove){
+		cursor = cursor->next;
+	}
+	cursor->next = cursor->next->next; 
+	free(cursor->next);
 
+}
 void add_my_process(pid_t pid, int background)
 {
 	newProcess *new_process = (newProcess *)malloc(sizeof(newProcess));
