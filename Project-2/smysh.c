@@ -21,16 +21,15 @@
 
 int counter = 1;
 
-void tstp_handler(int sig)
-{
-	signal(SIGTSTP, SIG_DFL);
-	/* Do cleanup actions here. */
-	//…
-	raise(SIGTSTP);
+void tstp_handler(int sig, pid_t foregroundProcess)
+{ // ^z Handler 
+	signal(SIGTSTP, tstp_handler);
+	kill(foregroundProcess, SIGSTOP);
 }
 
 /************************************ Datastructures ************************************/
 
+// struct that we will use to hold our background processes
 typedef struct process
 {
 	struct process *next; /* next process in pipeline */
@@ -39,12 +38,16 @@ typedef struct process
 	char completed;			 /* true if process has completed */
 	char stopped;			 /* true if process has stopped */
 	int status;				 /* reported status value */
-	char *args;
-	int no;
+	char *args;				 /* the arguments for the process */
+	int no;					 /* for ps all displaying */
 } process;
 
 process *process_list = NULL;
 
+/*
+	Concatenate the arguments for the process
+
+*/
 char *concatenate_args(char *args[]){
 	int i = 0;
 	char *res = malloc(sizeof(char) * 100);
@@ -59,6 +62,12 @@ char *concatenate_args(char *args[]){
 	}
 	return res;
 }
+/*
+	Fuction to display runnig and finished process.
+	It goes over the process list and check if the background processes are finished execution or not
+	Prints the related process in the related list, running process in running and finished processes in finished
+	After displaying the finished process it removes the finished process from list so its not printing it second time 
+*/
 void ps_all()
 {
 	process *cursor = process_list;
@@ -104,9 +113,11 @@ void ps_all()
 		counter = 1;
 	}
 }
+/*
+	Removes given process from the process list. and clearing memory after removing.
+*/
 void remove_process( process *remove){
 	process *cursor = process_list;
-	printf(" removing %d\n", cursor->pid);
 	if (remove == process_list){
 		process_list = process_list->next;
 		free(remove);
@@ -117,17 +128,19 @@ void remove_process( process *remove){
 	}
 	
 	if (remove->next == NULL){
-		printf("her for romeve last %d \n", remove->pid);
 		cursor->next = NULL;
 		free(remove);
 		return;
 	}
-
-	printf("her for romeve dsadsa %d \n", remove->pid);
-	cursor->next = cursor->next->next; 
+	cursor->next = remove->next; 
 	free(remove);
 
 }
+
+/*
+	Add process to process list. Creates process with its pid, background and args arguments. 
+	If there is no process before then it sets as first process of the list. if any goes over it and add to the end
+*/
 void add_my_process(pid_t pid, int background, char *args)
 {
 	process *new_process = (process *)malloc(sizeof(process));
@@ -159,12 +172,12 @@ void add_my_process(pid_t pid, int background, char *args)
 
 #pragma region Bookmark
 
-
+/* Bookmark Struct to keep bookmarks. It has args next and prev attributes. It is designed as doubly linked list structure*/
 typedef struct bookmark
 {
-	char *args;
-	struct bookmark *next;
-	struct bookmark *prev;
+	char *args;				/*bookmark arguments */
+	struct bookmark *next; /* next bookmark */
+	struct bookmark *prev; /* previous bookmark*/ 
 } bookmark;
 
 bookmark *first_bookmark = NULL;
@@ -187,6 +200,8 @@ bookmark *executeBookmark(int pos)
 	}
 	return cursor;
 }
+
+/*Prints the bookmark list*/
 void printBookmark()
 {
 	bookmark *cursor = first_bookmark;
@@ -200,6 +215,11 @@ void printBookmark()
 		cursor = cursor->next;
 	}
 }
+/*Removes the bookmark at the given index.
+	Iteratse through the bookmark list and finds the bookmark at that index.
+	Removes the related bookmark from list. If there is no bookmark at that index
+	just prints erro and informs the user.
+*/
 void deleteBookmark(int position)
 {
 	bookmark *cursor = first_bookmark;
@@ -254,6 +274,11 @@ void deleteBookmark(int position)
 	free(cursor);
 	printf("deletion succesfull\n");
 }
+/*
+	Adds given bookmark to the last of bookmark list.
+	If there is no bookmark before just sets the bookmark.
+	If there is goes over the list and append it to the end of it.
+*/
 void addBookmark(char *args[])
 {
 	bookmark *new_bookmark = (bookmark *)malloc(sizeof(bookmark));
@@ -364,6 +389,7 @@ void setup(char inputBuffer[], char *args[], int *background)
 /*************************************** Search ***************************************/
 #pragma region search
 
+/* the function returns the extension of a given filename*/
 char *get_filename_ext(const char *filename)
 {
 	const char *dot = strrchr(filename, '.');
@@ -371,21 +397,25 @@ char *get_filename_ext(const char *filename)
 		return "";
 	return dot + 1;
 }
-
+/* 
+the function is called if -r is specifed in the input
+it searches the current working directory and also its 
+subdirectories for the given str
+*/
 void searchSubDir(const char *name, int indent, char *str)
 {
 	DIR *dir;
 	struct dirent *entry;
 	char *filename;
 	FILE *fp;
-	int flag = 0;
 	int line_num;
 	int find_result = 0;
 	char temp[512];
 	char slash[50] = "";
+	// checking if we can open the directory 
 	if (!(dir = opendir(name)))
 		return;
-
+	// Iterate until there are no more entries to read in the directory 
 	while ((entry = readdir(dir)) != NULL)
 	{
 		if (entry->d_type == DT_DIR)
@@ -394,11 +424,10 @@ void searchSubDir(const char *name, int indent, char *str)
 			if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
 				continue;
 			snprintf(path, sizeof(path), "%s/%s", name, entry->d_name);
-			// printf("%*s[%s]\n", indent, "", entry->d_name);
 			searchSubDir(path, indent + 2, str);
 		}
 		else
-		{ //if it is a file
+		{ //if it is a file just search like in the search function
 			if (!strcmp(get_filename_ext(entry->d_name), "h") ||
 				!strcmp(get_filename_ext(entry->d_name), "c") ||
 				!strcmp(get_filename_ext(entry->d_name), "H") ||
@@ -412,15 +441,15 @@ void searchSubDir(const char *name, int indent, char *str)
 
 				if (fp == NULL)
 				{
-					printf("Error Occured.\n");
+					fprintf(stderr, "Error while opening the file.\n");
 					exit(1);
 				}
 				line_num = 1;
+				// the main algorithm of searching, opens the file and search in it 
 				while (fgets(temp, 512, fp) != NULL)
 				{
 					if ((strstr(temp, str)) != NULL)
 					{
-						flag = 1;
 						printf("\t%d: %s -> %s", line_num, slash, temp);
 						find_result++;
 					}
@@ -434,29 +463,26 @@ void searchSubDir(const char *name, int indent, char *str)
 			} // end of if
 		}
 	}
+	// close directory if still open.
 	closedir(dir);
-	if (flag == 0)
-	{
-		printf("No Match Found in this directory.\n");
-	}
 }
 
+/*
+the Function searches in all the files in the current working directory 
+in all the files with specifed extensions for a specific given word
+*/
 int search(char *string, int R)
 {
-	// printf("in search function\n");
-	// TODO extensive commenting
-	// TODO error checking
 	char *filename;
 	DIR *d, *sd;
 	struct dirent *dir;
 	FILE *fp;
-	int flag = 0;
 	int line_num;
 	int find_result = 0;
 	char temp[512];
 	d = opendir(".");
 	char cwd[PATH_MAX];
-
+	// call searchSubDir if -r is specifed 
 	if (R == 0)
 	{ // run with option -r
 		searchSubDir(".", 0, string);
@@ -464,35 +490,32 @@ int search(char *string, int R)
 	else
 	{ // run without option -r
 		if (d)
-		{
+		{ // if the directory is open
 			while ((dir = readdir(d)) != NULL)
-			{
+			{ // iterate until there is not me files to open
 				if (!strcmp(get_filename_ext(dir->d_name), "h") ||
 					!strcmp(get_filename_ext(dir->d_name), "c") ||
 					!strcmp(get_filename_ext(dir->d_name), "H") ||
 					!strcmp(get_filename_ext(dir->d_name), "C"))
-				{
+				{ // checking the files extension before searching
 					filename = dir->d_name;
-					// printf("%s\n", filename);
 					getcwd(cwd, sizeof(cwd));
-					// printf("cwd : s%s\n", cwd);
-					// printf("filename : s%s\n", filename);
 					strcat(cwd, "/");
 					strcat(cwd, filename);
-					// printf("searchin in %s\n", filename);
 					fp = fopen(filename, "r");
 
 					if (fp == NULL)
-					{
-						printf("Error Occured.\n");
+					{ // if the file couldn't open
+						fprintf(stderr, "Error whil opening the file.\n");
 						return 1;
 					}
 					line_num = 1;
+					// the main algorithm of searching, opens the file and search in
+					// it for the specifed string.
 					while (fgets(temp, 512, fp) != NULL)
 					{
 						if ((strstr(temp, string)) != NULL)
 						{
-							flag = 1;
 							printf("\t%d: ./%s -> %s", line_num, filename, temp);
 							find_result++;
 						}
@@ -505,32 +528,30 @@ int search(char *string, int R)
 					}
 				} // end of if
 			}	  // end of while
+			// close the directory if it is still open
 			closedir(d);
 		} // end of if d
-		if (flag == 0)
-		{
-			printf("No Match Found in this directory.\n");
-		}
 	} // end of if option -r
 }
 
 #pragma endregion
 /*************************************** Main ***************************************/
 
+/*
+the function takes the entered arguments and return their Enviroment Path
+it takes the background flag to remove & charcter from args
+*/
 char *find_given_command(char *args[], int background)
 {
 	int i = 0;
 	char *ch, ampersand[] = "&";
 	if (background)
-	{
+	{ // if background flag is true then remove & character
 		while (&ch != NULL)
 		{
-			//printf("%d\n", i);
 			ch = args[i];
-			//printf("%s\n", ch);
 			if (!strcmp(ch, ampersand))
 			{
-				//printf("hello we are in!!! -- %s-- \n", ampersand);
 				break;
 			}
 			i++;
@@ -544,7 +565,7 @@ char *find_given_command(char *args[], int background)
 	char *filename;
 	int is_exists = 0;
 	while (token != NULL)
-	{
+	{ // tokenizing the PATH and returning the filename paths
 		filename = malloc(strlen(token) + strlen(my_command) + 2);
 		strcpy(filename, token);
 		strcat(filename, "/");
@@ -552,7 +573,6 @@ char *find_given_command(char *args[], int background)
 
 		if (file = fopen(filename, "r"))
 		{
-			printf("Your file is here %s\n", filename);
 			is_exists = 1;
 			return filename;
 		}
@@ -566,90 +586,95 @@ int main(void)
 	int background;					  /* equals 1 if a command is followed by '&' */
 	char *args[MAX_LINE / 2 + 1];	  /*command line arguments */
 	int count;						  // count of items in args
-	int last;
+	int last;						/*the index of the last character in the search phrase, used in calling search*/
+	pid_t foregroundProcess = 0;  // holds the foreground process pid
+	struct sigaction action;  /*the action to change ^z response*/
+	int status_sig;				/*the signal status*/
+ 	signal(SIGTSTP, tstp_handler);  /* calling signal for the ^z functionality*/
+
 	while (1)
 	{
-		//init_shell();
 		background = 0;
 		count = 0;
 		printf("myshell: ");
 		/*setup() calls exit() when Control-D is entered */
 		setup(inputBuffer, args, &background);
-		if (inputBuffer[0] == NULL)
+
+		if (inputBuffer[0] == NULL)  // if input is empty ignore it
 			continue;
 		while (args[count] != NULL)
 		{ // counting items in args
 			count++;
 		}
 		if (!strcmp(args[0], "ps_all"))
-		{
-			//do_job_notification();ps
-			printf("calling ps_all for real\n");
+		{ // calling ps_all
 			ps_all();
 		}
 		else if (!strcmp(args[0], "search"))
 		{
-			last = strlen(args[1]) - 1;
-			/* removing quotation marks from input string*/
-			memmove(&args[1][last], &args[1][last + 1], strlen(args[1]) - last);
-			memmove(&args[1][0], &args[1][0 + 1], strlen(args[1]) - 0);
-
-			if (count == 3)
-			{
-				if (!strcmp(args[2], "-r"))
-				{
-					printf("calling search recurisve\n");
-					search(args[1], 0);
-				}
+			if (count == 3) // with -r in args[1]
+			{ // if -r is set then count is 3
+				last = strlen(args[2]) - 1;
+				/* removing quotation marks from input string*/
+				memmove(&args[2][last], &args[2][last + 1], strlen(args[2]) - last);
+				memmove(&args[2][0], &args[2][0 + 1], strlen(args[2]) - 0);
+				if (!strcmp(args[1], "-r"))
+				{ // if nothing is wrong with args then call search
+					search(args[2], 0);
+				} else {
+					fprintf(stderr, "Usage : search -r \"word to be searched\"");
+       	 	}		
 			}
-			else if (count == 2)
-			{
-				printf("calling search \n");
+			else if (count == 2) 
+			{ // if input without -r
+				last = strlen(args[1]) - 1;
+				/* removing quotation marks from input string*/
+				memmove(&args[1][last], &args[1][last + 1], strlen(args[1]) - last);
+				memmove(&args[1][0], &args[1][0 + 1], strlen(args[1]) - 0);
 				search(args[1], 1);
-			}
+			} else {
+        		fprintf(stderr, "Usage : search \"word to be searched\"");
+      		}
 		}
 		else if (!strcmp(args[0], "bookmark"))
 		{
-			if (count >= 2)
+			if (count >= 2)  // this has to be true otherwise invalid input
 			{
 				int last_ch = strlen(args[count - 1]);
-				if (!strcmp(args[1], "-l"))
+				if (!strcmp(args[1], "-l"))  // list all the saved bookmarks
 				{
 					printBookmark();
 				}
-				else if (!strcmp(args[1], "-d"))
+				else if (!strcmp(args[1], "-d"))  // delete the bookmark at the specified index
 				{
 					deleteBookmark(atoi(args[2]));
 				}
-				else if (args[1][0] == '"' && args[count - 1][last_ch - 1] == '"')
+				else if (args[1][0] == '"' && args[count - 1][last_ch - 1] == '"')  // save the new bookmark
 				{
 					args[count - 1][last_ch - 1] = '\0';
 					args[1]++;
 					addBookmark(args);
 				}
-				else if (!strcmp(args[1], "-i"))
+				else if (!strcmp(args[1], "-i"))  // execute the new bookmark
 				{
 					bookmark *cmd = executeBookmark(atoi(args[2]));
 					if (cmd != NULL)
 						system(cmd->args);
 					else
-						printf("No bookmark at this index!\n");
+						fprintf(stderr, "No bookmark at this index!\n");
 				}
 			}
-		}
-		else if (!strcmp(args[0], "^Z"))
-		{
-			printf("calling ^z\n");
-			// send SIGSTOP signal
-			tstp_handler(23);
-		}
-		else if (!strcmp(args[0], "exit"))
+			else
+			{
+				fprintf(stderr, "Invalid input for bookmark command!");
+			}
+		} else if (!strcmp(args[0], "exit"))
 		{ // calling exit
 			process *cursor = process_list;
 			int running = 0;
 			cursor = process_list;
-			while (cursor != NULL)
-			{
+			while (cursor != NULL)  
+			{ // iterate over the processes list and update their status if a new one is available
 				if (waitpid(cursor->pid, NULL, WNOHANG) == (cursor->pid))
 				{
 					cursor->completed = 1;
@@ -661,18 +686,17 @@ int main(void)
 				cursor = cursor->next;
 			}
 			cursor=process_list;
-			while (cursor != NULL)
+			while (cursor != NULL)  // check if any of the processes are still running
 			{
 				if (!cursor->completed)
 				{
-					//printf(" (Pid=%d)\n",cursor->pid);
 					running = 1;
 				}
 				cursor = cursor->next;
 			}
-			if (running)
+			if (running)  // if running tell the user he cant exit
 			{
-				printf("There are still running processes!\n");
+				printf("Warning: There are still running processes!\n");
 			}
 			else
 			{
@@ -683,12 +707,12 @@ int main(void)
 		{
 			int i = 0, k = 0;
 			char *ch = "";
-			char *tempBuffer[MAX_COMMAND_LEN] = {0}; // ls -l | wc -l < infile >> outfile
+			char *tempBuffer[MAX_COMMAND_LEN] = {0};
 			pid_t pid;
-			int in = stdin, out = stdout, err = stderr;
+			int in = stdin, out = stdout, err = stderr;  // resetting the I/O channels just to be sure
 			char *files[3] = {0}; // INFILE, OUTFILE, ERRFILE
 			int *FLAGS[5] = {0};  // PIPE_FLAG, TRUNC_FLAG, APPEND_FLAG, IN_FLAG, ERR_FLAG
-			while (args[i] != NULL)
+			while (args[i] != NULL)  // iterate over the args and build the commands
 			{
 				ch = args[i];
 				if (!strcmp(ch, "|"))
@@ -702,85 +726,102 @@ int main(void)
 				{
 					FLAGS[1] = 1; // set trunc flag
 					i++;
-					files[1] = args[i];
+					files[1] = args[i];  // set output file
 				}
 				else if (!strcmp(ch, ">>"))
 				{
 					FLAGS[2] = 1; // set append flag
 					i++;
-					files[1] = args[i];
+					files[1] = args[i];  // set output file
 				}
 				else if (!strcmp(ch, "<"))
 				{
 					FLAGS[3] = 1; // set in flag
 					i++;
-					files[0] = args[i];
+					files[0] = args[i];  // set input file
 				}
 				else if (!strcmp(ch, "2>"))
 				{
 					FLAGS[4] = 1; // set err flag
 					i++;
-					files[3] = args[i];
+					files[3] = args[i]; // set error file
 				}
 				else
 				{
-					tempBuffer[k] = args[i];
+					tempBuffer[k] = args[i];  // if not a special char just add it to temp buffer
 					k++;
 				}
 				i++;
 			}
 
-			pid = fork();
+			pid = fork();  // create a new child process
 
-			if (pid == 0)
+			if (pid == 0)  // this is the child
 			{
-				pid_t childpid = getpid();
+				if (!background) {  // if its a foreground process set the signal handling actions
+					foregroundProcess = getpid();
+					action.sa_handler = tstp_handler;
+					action.sa_flags = 0;
+					status_sig = sigemptyset(&action.sa_mask);
+				
+					if (status_sig == -1) {
+						fprintf(stderr, "Error");
+						exit(1);
+					}
+					status_sig = sigaction(SIGTSTP, &action, NULL);
+					if (status_sig == -1) {
+						fprintf(stderr,"errors");
+						exit(1);
+					}
+				} 
+				pid_t childpid = getpid();  // fo adding to the processes linked list
 				
 				if ((FLAGS[0] == 0) && (FLAGS[1] == 0) && (FLAGS[2] == 0) && (FLAGS[3] == 0) && (FLAGS[4] == 0))
-				{
+				{  // if none of our special case flags (pipeline, I/O redirection) are set run it with execv
 					char *path;
-					path = find_given_command(args, background);
-					execv(path, args);
-					perror("execv");
+					path = find_given_command(args, background);  // search for the path of the command
+					// execv(path, args);
+					if (execv(path, args) == -1){  // if the execv call is not succesful close the created process
+						perror("exev");  // print the error to stderr
+						exit(1);  // exit the new process so we dont have the shell running multiple times
+					}
 				}
-				else
+				else  // if we have a pipeline or I/O redirection
 				{
-					// set errfile
-					/*
 					int i = 0;
-					char *res = malloc(sizeof(char) * 100);
-					while (tempBuffer[i] != NULL)
-					{
-						//printf("in while %s", tempBuffer[i]);
-						char *tmp = malloc(sizeof(char) * sizeof(tempBuffer[i]));
-						memcpy(tmp, tempBuffer[i], sizeof(tempBuffer[i]) + 1);
-						strcat(res, tmp);
-						strcat(res, " ");
-						i++;
-					}*/
-					char *res = concatenate_args(tempBuffer);
-					if (FLAGS[4] == 1)
+                    char *res = malloc(sizeof(char) * 100);
+                    while (tempBuffer[i] != NULL)
+                    {
+                        //printf("in while %s", tempBuffer[i]);
+                        char *tmp = malloc(sizeof(char) * sizeof(tempBuffer[i]));
+                        memcpy(tmp, tempBuffer[i], sizeof(tempBuffer[i]) + 1);
+                        strcat(res, tmp);
+                        strcat(res, " ");
+                        i++;
+                    }
+					// char *res = concatenate_args(tempBuffer);  // concatenate the tempBuffer so we can give it to system() function 
+					if (FLAGS[4] == 1)  // if there is error redirection
 					{ // error
-						err = open(files[2], CREATE_MODE);
+						err = open(files[2], CREATE_TRUNC_FLAGS, CREATE_MODE);
 						if (err == -1)
 						{
-							perror("Failed to open stderr");
+							perror("Failed to open error file");
 							return;
 						}
 						if (dup2(err, STDERR_FILENO) == -1)
 						{
-							perror("Failed to write standard error");
+							perror("Failed to open error file");
 							return;
 						}
 						if (close(err) == -1)
 						{
-							perror("Failed to close the strerr");
+							perror("Failed to open error file");
 							return;
 						}
 					}
 
 					// set infile
-					if (FLAGS[3] == 1)
+					if (FLAGS[3] == 1)  // if there is input redirection
 					{
 						in = open(files[0], READ_FLAGS);
 						if (in == -1)
@@ -801,7 +842,7 @@ int main(void)
 					}
 
 					// set outfile
-					if ((FLAGS[1] == 1) || (FLAGS[2] == 1))
+					if ((FLAGS[1] == 1) || (FLAGS[2] == 1))   // if there is output redirection
 					{
 						if ((FLAGS[1] == 1) && (FLAGS[2] != 1))
 						{ // truncate
@@ -847,8 +888,8 @@ int main(void)
 							return;
 						}
 					}
-					system(res);
-					exit(1);
+					system(res);  // execute the command with system call
+					exit(1);  // exit the new process so we dont have multiple shells running
 				}
 			}
 			else if (pid < 0)
@@ -861,10 +902,10 @@ int main(void)
 			{
 				if (!background)
 				{
-					wait(NULL);
+					wait(NULL);  // if the new process is a foreground process wait for it
 				}else{
 					char *process_args = concatenate_args(args);
-					add_my_process(pid, background, process_args);
+					add_my_process(pid, background, process_args);  // add the background process to our linked list
 				}
 			}
 		}
