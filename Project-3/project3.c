@@ -5,7 +5,8 @@
 #include <semaphore.h>
 #include <string.h>
 
-sem_t **bufManip; // array to hold mutex for each publisherType
+// sem_t **bufManip; // array to hold mutex for each publisherType
+pthread_mutex_t **bufManip;
 
 typedef struct thread  // struct for publisher thread
 {
@@ -65,9 +66,9 @@ void *publish_book(void *arg){  // function for publisher threads
     book *my_arg = (book *) arg;  // get the arguments for the books to be created
     int i;
     for (i = 0; i< my_arg->total_no_book; i++){
-        // pthread_mutex_lock((bufManip + my_arg->ptype - 1));
         int a = my_arg->ptype -1;
         //sem_wait(bufManip[a]);
+        pthread_mutex_lock(bufManip[a]);
         printf("locked mutex: %d\n", a);
         if (my_arg->pblshr_strct->buffer == NULL){
             printf("allocating memory\n");
@@ -78,24 +79,39 @@ void *publish_book(void *arg){  // function for publisher threads
         sprintf(book_str,"Book%d_%d", (int) my_arg->ptype, (int) my_arg->pblshr_strct->bookCount);
         my_arg->pblshr_strct->bookCount++;
         int index, is_empty = 0;
-        for ( index = 0; index < my_arg->pblshr_strct->buffer_size; i++){
-            if (my_arg->pblshr_strct->buffer[index] == NULL){
+        // for ( index = 0; index < my_arg->pblshr_strct->buffer_size; i++){
+        //     if (my_arg->pblshr_strct->buffer[index] == NULL){
+        //         is_empty = 1;
+        //         break;
+        //     }
+        // }
+
+        while (index < my_arg->pblshr_strct->buffer_size){
+            if (my_arg->pblshr_strct->buffer[index] != NULL)
+                index++;
+            else
+            {
                 is_empty = 1;
                 break;
             }
+            
         }
 
         if (!is_empty){
             double_buffer_size(my_arg);
         }
-        /*my_arg->pblshr_strct->buffer[index] = (char *)malloc(sizeof(book_str));
-        my_arg->pblshr_strct->buffer[index]= book_str;*/
 
+        printf("index to insert: %d\n", index);
+        my_arg->pblshr_strct->buffer[index] = (char *)malloc(sizeof(book));
+        my_arg->pblshr_strct->buffer[index]= book_str;
 
+        printf("book in buffer: %s\n", my_arg->pblshr_strct->buffer[index]= book_str);
         printf("Publisher %d of type %d\t%s is published and put into the buffer %d\n", my_arg->pno, my_arg->ptype, book_str, my_arg->ptype);
-        // pthread_mutex_unlock((bufManip + my_arg->ptype - 1));
-        //sem_post(bufManip[a]);
         printf("unlocked mutex: %d\n", a);
+        printf("sleeeeeeeeeeeeeeeeeeeeepinnngggggggggggggggggggg\n");
+        sleep(1);
+        pthread_mutex_unlock(bufManip[a]);
+        //sem_post(bufManip[a]);
     }
     printf("-------------yaz yaz bitmio amk-------------\n");
 }
@@ -116,7 +132,8 @@ int main(int argc, char* argv[]) {
     if ( argc != 10 ){return 1;}
     
     int pubTypeCount = atoi(argv[2]), pubCount = atoi(argv[3]), packCount = atoi(argv[4]);
-    bufManip = (sem_t **)malloc(sizeof(sem_t *) * pubTypeCount);
+    //bufManip = (sem_t **)malloc(sizeof(sem_t *) * pubTypeCount);
+    bufManip = (pthread_mutex_t **)malloc(sizeof(pthread_mutex_t *) * pubTypeCount);
     publisher_type *publishers[pubTypeCount];
     /** May need to design for loop for publisher. Additional for loop to call publishbook func with the  given number */
     printf("arg 9 : %s, pub type: %d, pub thread: %d\n", argv[9],pubTypeCount, pubCount);
@@ -125,8 +142,9 @@ int main(int argc, char* argv[]) {
         publisher_type *publisher = (publisher_type *)malloc(sizeof(publisher_type));
         
         
-        sem_t mutex;  // initialize a mutex for current publisherType
-        sem_init(&mutex, 0, 1);
+        // sem_t mutex;  // initialize a mutex for current publisherType
+        // sem_init(&mutex, 0, 1);
+        pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
         bufManip[i-1] = &mutex;  // set mutex to global buffer according to publisherType number
         // publisher->mutex = &mutex;
 
