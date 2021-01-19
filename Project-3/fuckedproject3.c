@@ -62,11 +62,11 @@ void *publish_book(void *arg){  // function for publisher threads
     for (i = 0; i< my_arg->total_no_book; i++){  // loop until goal of book numbers is reached
         int a = my_arg->ptype -1;
         pthread_mutex_lock(bufManip[a]);  // lock the mutex for critical sextion
+        char book_str[20];
         if (my_arg->pblshr_strct->buffer == NULL){  // create the publisher types buffer if it doesn't exist yet
-            my_arg->pblshr_strct->buffer = (char**) calloc(my_arg->total_no_book, sizeof(char*));
+            my_arg->pblshr_strct->buffer = (char**) calloc(my_arg->total_no_book, sizeof(book_str));
         }
 
-        char book_str[20];
         sprintf(book_str,"Book%d_%d", (int) my_arg->ptype, (int) my_arg->pblshr_strct->bookCount);
         my_arg->pblshr_strct->bookCount++;
         int index, is_empty = 0;
@@ -105,10 +105,10 @@ void *publish_book(void *arg){  // function for publisher threads
         }
         //printf(" %s %d\n", my_arg->pblshr_strct->buffer[index], index);
         // if (my_arg->pblshr_strct->bookCount-1==6){
-            printf("--------bookcount: %d --------- index : %d\n", my_arg->pblshr_strct->bookCount-1,index);
+            // printf("--------bookcount: %d --------- index : %d\n", my_arg->pblshr_strct->bookCount-1,index);
         // }
         printf("BEFORE ADDING INDEX: %d, THREADID: %d\n", index, pthread_self());
-        my_arg->pblshr_strct->buffer[index] = (char *)malloc(sizeof(char)*20);
+        // my_arg->pblshr_strct->buffer[index] = (char *)malloc(sizeof(char)*20);
         my_arg->pblshr_strct->buffer[index] = book_str;  // adding the book to our buffer
         // printf("AFTER ADDING, INDEX: 5, %s THREADID: %d\n",my_arg->pblshr_strct->buffer[6],pthread_self());
 
@@ -193,7 +193,7 @@ int main(int argc, char* argv[]) {
     int pubTypeCount = atoi(argv[2]), pubCount = atoi(argv[3]), packCount = atoi(argv[4]);
     buffer_number = pubTypeCount;
     bufManip = (pthread_mutex_t **)malloc(sizeof(pthread_mutex_t *) * pubTypeCount);
-    package = (char**) calloc( atoi(argv[8]), sizeof(char*) );
+    package = (char**) calloc( atoi(argv[8]), sizeof(char) *20);
     publisher_type *publishers[pubTypeCount];
     packager *packager_list[packCount];
     printf("arg 9 : %s, pub type: %d, pub thread: %d\n", argv[9],pubTypeCount, pubCount);
@@ -220,14 +220,14 @@ int main(int argc, char* argv[]) {
         }
 
     }
-    for (k = 1; k <= packCount; k++){  // create packager threads
-        pthread_t thread_no;  // init packager thread
-        packager *packager_strc = (packager *) malloc(sizeof(packager));
-        packager_strc->tid = thread_no; packager_strc->number = k;  // assign data to the packager
-        packager_list[k-1] = packager_strc;
-        packager_strc->publisher_list = publishers;
-        //pthread_create(&thread_no, NULL, &package_book, (void *)packager_strc);  // launch the packager thread
-    }
+    // for (k = 1; k <= packCount; k++){  // create packager threads
+    //     pthread_t thread_no;  // init packager thread
+    //     packager *packager_strc = (packager *) malloc(sizeof(packager));
+    //     packager_strc->tid = thread_no; packager_strc->number = k;  // assign data to the packager
+    //     packager_list[k-1] = packager_strc;
+    //     packager_strc->publisher_list = publishers;
+    //     pthread_create(&thread_no, NULL, &package_book, (void *)packager_strc);  // launch the packager thread
+    // }
 
     /* 
     pthread_join publisher threads in for loop
