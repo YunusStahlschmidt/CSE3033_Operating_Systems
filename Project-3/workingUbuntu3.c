@@ -10,8 +10,6 @@ int buffer_number;  // how many publisher types are there
 char **package;  // books thats will be stored in this package
 pthread_mutex_t package_mutex = PTHREAD_MUTEX_INITIALIZER;  // mutex for package buffer
 int size_package;
-int is_finished_counter;
-pthread_mutex_t global_counter_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 typedef struct thread  // struct for publisher thread
 {
@@ -99,9 +97,6 @@ void *publish_book(void *arg){  // function for publisher threads
         pthread_mutex_unlock(bufManip[a]);  // done with shared data access
     }
     printf("Publisher %d of type %d\tFinished publishing %d books. Exiting the system.\n",  my_arg->pno, my_arg->ptype, my_arg->total_no_book);
-    pthread_mutex_lock(&global_counter_mutex);
-    is_finished_counter++;
-    pthread_mutex_unlock(&global_counter_mutex);
     pthread_exit(0);
 }
 
@@ -115,66 +110,53 @@ void *package_book(void *arg){  // function for the packager threads
 
     int counter = 0;
     while (1){
-        if (counter == 60)
-            break;
-        counter++;
-        pthread_mutex_lock(&package_mutex);
-        if (my_arg->publisher_list[buffer_number-1]->is_finished == 1){
-            // tbd add more detail to print
-            printf("Packager %d\tThere are no publishers left in the system.\n\t\t", my_arg->number);
+        pthread_mutex_lock(&package_mutex);  // lock the package mutex so the other packagers have to wait
+        if (my_arg->publisher_list[buffer_number-1]->is_finished == 1){  // if there are no publishers left break the while loop and exit
+            // print the books inside the package 
+            printf("Packager %d\tThere are no publishers left in the system. The package contains\n\t\t", my_arg->number);
             int j;
-            for (j=0; j<size_package;j++){
+            for (j=0; j<size_package;j++){ //iterates over the package array to display books
                 if (package[j]==NULL){break;}
                 printf("%s, ",package[j]);
             }
             printf(".\n");
             break;
         }
-        else{
-            //pthread_mutex_lock(&package_mutex);
+        else{  // if there still are publishers left
             int i, is_full=1;
-            for (i=0; i<size_package;i++){
+            for (i=0; i<size_package;i++){  // look where the next empty spot in the package is
                 if (package[i] == NULL){
                     is_full = 0;
                     break;
                 }
             }
-            if (is_full){
-                printf("Packager %d \t Finished preparing one package. The package contains: \n\t\t\t", my_arg->number);
-                // int j;
-                // for (j=0; j<size_package;j++){
-                //     printf("%s, ",package[j]);
-                //     package[j] = NULL;
-                // }
-                // printf(".\n");
-            }
-            else{
-                int random_buffer_index = rand() % buffer_number;
-                pthread_mutex_lock(bufManip[random_buffer_index]);
-                
-                char *pubBuff = my_arg->publisher_list[random_buffer_index]->buffer[0];
-                if (pubBuff == NULL){
-                    //if its null just pass
-                }else{
-                    package[i] = pubBuff;
-                    printf("Packager %d\t Put %s into the package.\n", my_arg->number, package[i]);
+      
+            int random_buffer_index = rand() % buffer_number;  // chose a random publisher to pick a book from
+            pthread_mutex_lock(bufManip[random_buffer_index]);  // lock the buffer for the selected publisher type
+            
+            char *pubBuff = my_arg->publisher_list[random_buffer_index]->buffer[0];
+            if (pubBuff == NULL){
+                //if there is no book just pass
+            }else{
+                package[i] = pubBuff; //assigning package ith element as selected buffers first element
+                printf("Packager %d\t Put %s into the package.\n", my_arg->number, package[i]);
 
-                    int j;
-                    for (j = 0; j<publishers[random_buffer_index]->buffer_size-1; j++){        
-                        publishers[random_buffer_index]->buffer[j] = publishers[random_buffer_index]->buffer[j+1];
-                    }
-                    publishers[random_buffer_index]->buffer[j] = NULL;
+                int j;
+                for (j = 0; j<publishers[random_buffer_index]->buffer_size-1; j++){  // shift the items in the buffer to the front
+                    publishers[random_buffer_index]->buffer[j] = publishers[random_buffer_index]->buffer[j+1];
                 }
-                pthread_mutex_unlock(bufManip[random_buffer_index]);
+                publishers[random_buffer_index]->buffer[j] = NULL;//last item in the buffer should be null after shifting
             }
-            is_full = 1;
-            for (i=0; i<size_package;i++){
+            pthread_mutex_unlock(bufManip[random_buffer_index]);//unlocking the publisher buffer mutex
+            
+            is_full = 1;  
+            for (i=0; i<size_package;i++){  //iterates over the package and looks for an empty slot
                 if (package[i] == NULL){
                     is_full = 0;
                     break;
                 }
             }
-            if (is_full){
+            if (is_full){  // if the package is full after adding a book print the package and empty it afterwards
                 printf("Packager %d \t Finished preparing one package. The package contains: \n\t\t", my_arg->number);
                 int j;
                 for (j=0; j<size_package;j++){
@@ -183,16 +165,14 @@ void *package_book(void *arg){  // function for the packager threads
                 }
                 printf(".\n");
             }
-
-            //pthread_mutex_unlock(&package_mutex);
         }
-        pthread_mutex_unlock(&package_mutex);
+        pthread_mutex_unlock(&package_mutex);  // unlock the package mutex
     } 
-    pthread_mutex_unlock(&package_mutex);
+    pthread_mutex_unlock(&package_mutex);  // unlock the package mutex ( safeguard )
 }
 
 
-int main(int argc, char* argv[]) {
+int main(int argc, char* argv[]) {  // main function to create and hold the threads
     if ( argc != 10 ){return 1;}
     
     int pubTypeCount = atoi(argv[2]), pubCount = atoi(argv[3]), packCount = atoi(argv[4]);
@@ -217,10 +197,8 @@ int main(int argc, char* argv[]) {
             book *my_arg = (book *)malloc(sizeof(book));
             my_arg->ptype = i;my_arg->pno = j;my_arg->pblshr_strct = publisher, my_arg->total_no_book = atoi(argv[6]);  // set args for books of this publisherType and publisher thread
             pthread_t thread_no;  // initialize new publisher thread
-            printf("---------thread number: %lu\n", thread_no);
             thread *thread_strc = (thread *) malloc(sizeof(thread));
             thread_strc->tid = thread_no;
-            printf("Created publisher thread no: %lu\n", thread_strc->tid);
             thread_strc->num_of_created_books = 0;
             thread_strc->max_num_of_books = atoi(argv[6]);  // set how many books the publisher needs to publish
             thread_strc->is_finished = 0;
@@ -242,11 +220,7 @@ int main(int argc, char* argv[]) {
     if all threads from a publisher type have been joined remove publisher from publishers list
     */
     for (i = 0; i < pubTypeCount; i++){
-        // while(is_finished_counter<(pubTypeCount*pubCount)){
-
-        // }
         for (j = 1; j < pubCount; j++){
-            printf("-----------I: %d, J: %d, thread no: %lu\n", i, j, publishers[i]->threads_array[j]->tid);
             pthread_join(publishers[i]->threads_array[j]->tid, NULL);
         }
         publishers[i]->is_finished = 1;
