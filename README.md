@@ -1,4 +1,4 @@
-Group projects for the Operating systems course. The projects were coded is shell or C in the Linux OS running in a Docker container.
+Group projects for the Operating systems course. The projects were coded in shell or C in the Linux OS running in a Docker container.
 
 ### Group Members
   1. Muhammed Fatih Öztel
